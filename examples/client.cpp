@@ -22,7 +22,7 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    if (rudp_connect(fd, (struct sockaddr*)&addr, sizeof(addr)) <= 0) {
+    if (rudp_connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) <= 0) {
         perror("rudp_connect");
         exit(EXIT_FAILURE);
     }

@@ -19,7 +19,8 @@ int main() {
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(8888);
 
-    if (rudp_bind(server_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0) {
+    if (rudp_bind(server_fd, reinterpret_cast<struct sockaddr*>(&server_addr),
+                  sizeof(server_addr)) < 0) {
         perror("rudp_bind");
         exit(EXIT_FAILURE);
     }
@@ -30,7 +31,8 @@ int main() {
         struct sockaddr_in client_addr;
         socklen_t client_len = sizeof(client_addr);
 
-        int client_fd = rudp_accept(server_fd, (struct sockaddr*)&client_addr, &client_len);
+        int client_fd =
+            rudp_accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
         if (client_fd < 0) {
             perror("rudp_accept");
             continue;
