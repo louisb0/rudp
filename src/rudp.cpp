@@ -1,128 +1,76 @@
+#include "rudp.hpp"
+
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "internal/common.hpp"
+#include <cstring>
+#include <mutex>
 
-#define MAX_CONNECTIONS 1024
+#include "common.hpp"
+#include "packet.hpp"
+#include "reliability.hpp"
+#include "socket.hpp"
 
-#define RUDP_SYN 1
-#define RUDP_SYNACK 2
-#define RUDP_ACK 3
+namespace rudp {
 
-struct rudp_header {
-    u16 seq_num;
-    u16 ack_num;
-    u8 flags;
-} __attribute__((packed));
-
-struct rudp_connection {
-    int sockfd;
-    u16 seq_num;
-    u16 ack_num;
-    bool connected;
-};
-
-static rudp_connection connections[MAX_CONNECTIONS];
-
-int rudp_socket(void) {
-    int sockfd = socket(AF_INET, SOCK_DGRAM, 0);
-    if (sockfd < 0) {
-        return -1;
-    }
-
-    rudp_connection* conn = &connections[sockfd];
-    conn->sockfd = sockfd;
-    conn->seq_num = 0;
-    conn->ack_num = 0;
-
-    return sockfd;
+int socket(void) {
+    return internal::socket_create();
 }
 
-int rudp_bind(int sockfd, struct sockaddr* addr, socklen_t addrlen) {
-    return bind(sockfd, addr, addrlen);
+int bind(rudpfd_t sockfd, struct sockaddr* addr, socklen_t addrlen) {
+    return ::bind(internal::socket_get(sockfd)->fd, addr, addrlen);
 }
 
-int rudp_connect(int sockfd, struct sockaddr* addr, socklen_t addrlen) {
-    rudp_connection* conn = &connections[sockfd];
-
-    rudp_header syn;
-    syn.seq_num = conn->seq_num++;
-    syn.ack_num = conn->ack_num;
-    syn.flags = RUDP_SYN;
-
-    if (sendto(sockfd, &syn, sizeof(syn), 0, addr, addrlen) <= 0) {
-        return -1;
-    }
-
-    // NOTE: This is an MVP, but, anybody could send a SYN-ACK at the perfect time and hijack this
-    // connection.
-    rudp_header synack;
-    socklen_t len = addrlen;
-    if (recvfrom(sockfd, &synack, sizeof(rudp_header), 0, addr, &len) <= 0) {
-        return -1;
-    }
-
-    if (synack.flags != RUDP_SYNACK || synack.ack_num != conn->seq_num) {
-        return -1;
-    }
-
-    conn->ack_num = synack.seq_num + 1;
-
-    rudp_header ack;
-    ack.seq_num = conn->seq_num++;
-    ack.ack_num = conn->ack_num;
-    ack.flags = RUDP_ACK;
-
-    if (sendto(sockfd, &ack, sizeof(ack), 0, addr, addrlen) <= 0) {
-        return -1;
-    }
-
-    conn->connected = true;
-    return 1;
+int listen(rudpfd_t sockfd, int backlog) {
+    internal::socket_get(sockfd)->state = internal::socket::LISTEN;
+    return 0;
 }
 
-int rudp_accept(int sockfd, struct sockaddr* addr, socklen_t* addrlen) {
-    rudp_connection* conn = &connections[sockfd];
+rudpfd_t accept(rudpfd_t sockfd, struct sockaddr* addr, socklen_t* addrlen) {
+    internal::socket* listen_sock = internal::socket_get(sockfd);
+    std::unique_lock<std::mutex> lock(listen_sock->mtx);
 
-    rudp_header syn;
-    if (recvfrom(sockfd, &syn, sizeof(syn), 0, addr, addrlen) <= 0) {
-        return -1;
+    listen_sock->cv.wait(lock, [listen_sock]() { return !listen_sock->accept_queue.empty(); });
+
+    rudpfd_t new_fd = listen_sock->accept_queue.front();
+    listen_sock->accept_queue.pop();
+
+    if (addr && addrlen) {
+        internal::socket* new_sock = internal::socket_get(new_fd);
+        memcpy(addr, &new_sock->peer.addr, std::min(*addrlen, new_sock->peer.addr_len));
+        *addrlen = new_sock->peer.addr_len;
     }
 
-    if (syn.flags != RUDP_SYN) {
-        return -1;
-    }
-
-    conn->ack_num = syn.seq_num + 1;
-
-    rudp_header synack;
-    synack.seq_num = conn->seq_num++;
-    synack.ack_num = conn->ack_num;
-    synack.flags = RUDP_SYNACK;
-
-    if (sendto(sockfd, &synack, sizeof(synack), 0, addr, *addrlen) <= 0) {
-        return -1;
-    }
-
-    rudp_header ack;
-    if (recvfrom(sockfd, &ack, sizeof(ack), 0, addr, addrlen) <= 0) {
-        return -1;
-    }
-
-    if (ack.flags != RUDP_ACK || ack.ack_num != conn->seq_num) {
-        return -1;
-    }
-
-    conn->connected = true;
-    return 1;
+    return new_fd;
 }
 
-int rudp_close(int sockfd) {
-    connections[sockfd].connected = false;
-    return close(sockfd);
+int connect(rudpfd_t sockfd, struct sockaddr* addr, socklen_t addrlen) {
+    internal::socket* sock = internal::socket_get(sockfd);
+    std::unique_lock<std::mutex> lock(sock->mtx);
+
+    memcpy(&sock->peer.addr, addr, addrlen);
+    sock->peer.addr_len = addrlen;
+    sock->peer.seq_num = 0;
+
+    internal::reliably_send(sock, internal::create_syn(sock));
+    sock->state = internal::socket::SYN_SENT;
+
+    sock->cv.wait(lock, [sock]() { return sock->state == internal::socket::ESTABLISHED; });
+    return 0;
 }
 
-int rudp_listen(int sockfd, int backlog);
-size_t rudp_send(int sockfd, const void* buf, size_t len, int flags);
-size_t rudp_recv(int sockfd, void* buf, size_t len, int flags);
+size_t send(rudpfd_t sockfd, const void* buf, size_t len, int flags);
+size_t recv(rudpfd_t sockfd, void* buf, size_t len, int flags);
+
+int close(rudpfd_t sockfd) {
+    internal::socket* sock = internal::socket_get(sockfd);
+    linuxfd_t fd = sock->fd;
+
+    internal::socket_delete(sockfd);
+
+    // TCP closing sequence
+    return ::close(fd);
+}
+
+}  // namespace rudp

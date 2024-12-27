@@ -1,2 +1,2 @@
 # rudp
-UDP with the reliability guarantees as TCP.
+UDP with the reliability of TCP.

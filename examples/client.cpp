@@ -6,9 +6,9 @@
 #include <rudp.hpp>
 
 int main() {
-    int fd = rudp_socket();
+    int fd = rudp::socket();
     if (fd < 0) {
-        perror("rudp_socket");
+        perror("rudp::socket");
         exit(EXIT_FAILURE);
     }
 
@@ -22,13 +22,13 @@ int main() {
         exit(EXIT_FAILURE);
     }
 
-    if (rudp_connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) <= 0) {
-        perror("rudp_connect");
+    if (rudp::connect(fd, reinterpret_cast<struct sockaddr*>(&addr), sizeof(addr)) < 0) {
+        perror("rudp::connect");
         exit(EXIT_FAILURE);
     }
 
     printf("Connected\n");
 
-    rudp_close(fd);
+    rudp::close(fd);
     return 0;
 }

@@ -7,9 +7,9 @@
 #include <rudp.hpp>
 
 int main() {
-    int server_fd = rudp_socket();
+    int server_fd = rudp::socket();
     if (server_fd < 0) {
-        perror("rudp_socket");
+        perror("rudp::socket");
         exit(EXIT_FAILURE);
     }
 
@@ -19,9 +19,14 @@ int main() {
     server_addr.sin_addr.s_addr = INADDR_ANY;
     server_addr.sin_port = htons(8888);
 
-    if (rudp_bind(server_fd, reinterpret_cast<struct sockaddr*>(&server_addr),
-                  sizeof(server_addr)) < 0) {
-        perror("rudp_bind");
+    if (rudp::bind(server_fd, reinterpret_cast<struct sockaddr*>(&server_addr),
+                   sizeof(server_addr)) < 0) {
+        perror("rudp::bind");
+        exit(EXIT_FAILURE);
+    }
+
+    if (rudp::listen(server_fd, -1) < 0) {
+        perror("rudp::listen");
         exit(EXIT_FAILURE);
     }
 
@@ -32,14 +37,14 @@ int main() {
         socklen_t client_len = sizeof(client_addr);
 
         int client_fd =
-            rudp_accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
+            rudp::accept(server_fd, reinterpret_cast<struct sockaddr*>(&client_addr), &client_len);
         if (client_fd < 0) {
-            perror("rudp_accept");
+            perror("rudp::accept");
             continue;
         }
 
         printf("Connected to %s:%d\n", inet_ntoa(client_addr.sin_addr),
                ntohs(client_addr.sin_port));
-        rudp_close(client_fd);
+        rudp::close(client_fd);
     }
 }
