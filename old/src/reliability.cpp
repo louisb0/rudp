@@ -21,16 +21,16 @@ struct connection_state {
     socket* sock;
 };
 
-static std::unordered_map<linuxfd_t, connection_state> connections;
+static std::unordered_map<linuxfd_t, connection_state> s_connections;
 
 static connection_state& connection(socket* const sock) {
-    auto it = connections.find(sock->fd);
-    if (it == connections.end()) {
+    auto it = s_connections.find(sock->fd);
+    if (it == s_connections.end()) {
         connection_state state;
         state.next_expected_seq = 0;
         state.sock = sock;
 
-        auto [inserted_it, _] = connections.insert({sock->fd, std::move(state)});
+        auto [inserted_it, _] = s_connections.insert({sock->fd, std::move(state)});
         return inserted_it->second;
     }
 
@@ -126,7 +126,7 @@ std::optional<packet> reliably_recv(socket* const sock) noexcept {
 void retransmit() noexcept {
     auto now = std::chrono::steady_clock::now();
 
-    for (auto& [_, conn] : connections) {
+    for (auto& [_, conn] : s_connections) {
         std::queue<u32> resends;
 
         for (const auto& [seq_num, tx_state] : conn.sent_packets) {
