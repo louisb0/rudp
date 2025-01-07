@@ -1,2 +1,2 @@
 # rudp
-UDP with the reliability of TCP.
+The TCP state machine implemented on UDP.
