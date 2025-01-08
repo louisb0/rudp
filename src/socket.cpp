@@ -4,6 +4,7 @@
 #include <sys/socket.h>
 
 #include "internal/common.hpp"
+#include "internal/event_loop.hpp"
 
 namespace rudp::internal {
 
@@ -24,8 +25,7 @@ rudpfd_t socket_manager::create() noexcept {
     ev.events = EPOLLIN;
     ev.data.u32 = new_fd;
 
-    // TODO: Add proper epollfd.
-    if (epoll_ctl(0, EPOLL_CTL_ADD, fd, &ev) < 0) {
+    if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
         close(fd);
         return -1;
     }
