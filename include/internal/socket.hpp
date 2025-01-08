@@ -1,6 +1,7 @@
 #pragma once
 
 #include <condition_variable>
+#include <queue>
 #include <unordered_map>
 
 #include "common.hpp"
@@ -24,7 +25,10 @@ struct socket {
 
     std::condition_variable cv;
 
+    // TODO: Consider a union with connecting / listening socket types.
     struct {
+        s32 backlog;
+        std::queue<rudpfd_t> queue;
     } listen_data;
 };
 

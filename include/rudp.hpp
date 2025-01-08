@@ -14,4 +14,4 @@ size_t send(int sockfd, const void *buf, size_t len, int flags);
 size_t recv(int sockfd, void *buf, size_t len, int flags);
 int close(int sockfd);
 
-} // namespace rudp
+}  // namespace rudp

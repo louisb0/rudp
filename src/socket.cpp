@@ -3,6 +3,8 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 
+#include <queue>
+
 #include "internal/common.hpp"
 #include "internal/event_loop.hpp"
 
@@ -16,7 +18,7 @@ socket_manager &socket_manager::instance() noexcept {
 rudpfd_t socket_manager::create() noexcept {
     bool epoll_initalised = ensure_event_loop();
     if (!epoll_initalised) {
-        RUDP_ASSERT(epollfd < 0, "errno should be propgogated");
+        RUDP_ASSERT(epollfd < 0, "errno should be propogated");
         return -1;
     }
 
@@ -39,9 +41,16 @@ rudpfd_t socket_manager::create() noexcept {
         return -1;
     }
 
-    internal::socket socket{};
-    socket.fd = fd;
-    socket.state = socket::CLOSED;
+    internal::socket socket{
+        .fd = fd,
+        .state = socket::CLOSED,
+        .cv = std::condition_variable{},
+        .listen_data =
+            {
+                .backlog = -1,
+                .queue = std::queue<rudpfd_t>{},
+            },
+    };
 
     RUDP_ASSERT(m_sockets.find(new_fd) == m_sockets.end(), "fd already exists");
     m_sockets.emplace(new_fd, std::move(socket));
