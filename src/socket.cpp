@@ -14,12 +14,21 @@ socket_manager &socket_manager::instance() noexcept {
 }
 
 rudpfd_t socket_manager::create() noexcept {
+    bool epoll_initalised = ensure_event_loop();
+    if (!epoll_initalised) {
+        RUDP_ASSERT(epollfd < 0, "errno should be propgogated");
+        return -1;
+    }
+
+    RUDP_ASSERT(epollfd >= 0, "epoll not initialised");
+
     linuxfd_t fd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
         return -1;
     }
 
     rudpfd_t new_fd = m_next_fd++;
+    RUDP_ASSERT(m_next_fd >= 0, "fd counter overflow");
 
     struct epoll_event ev;
     ev.events = EPOLLIN;
@@ -34,6 +43,7 @@ rudpfd_t socket_manager::create() noexcept {
     socket.fd = fd;
     socket.state = socket::CLOSED;
 
+    RUDP_ASSERT(m_sockets.find(new_fd) == m_sockets.end(), "fd already exists");
     m_sockets.emplace(new_fd, std::move(socket));
 
     return new_fd;

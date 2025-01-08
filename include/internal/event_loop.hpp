@@ -5,9 +5,8 @@
 namespace rudp::internal {
 
 extern linuxfd_t epollfd;
-extern bool running;
 
-void event_loop();
-void ensure_event_loop();
+void event_loop() noexcept;
+[[nodiscard]] bool ensure_event_loop() noexcept;
 
 }  // namespace rudp::internal
