@@ -3,7 +3,10 @@
 #include <sys/epoll.h>
 #include <sys/socket.h>
 
+#include <condition_variable>
+#include <memory>
 #include <queue>
+#include <unordered_map>
 
 #include "internal/common.hpp"
 #include "internal/event_loop.hpp"
@@ -21,7 +24,6 @@ rudpfd_t socket_manager::create() noexcept {
         RUDP_ASSERT(epollfd < 0, "errno should be propogated");
         return -1;
     }
-
     RUDP_ASSERT(epollfd >= 0, "epoll not initialised");
 
     linuxfd_t fd = ::socket(AF_INET, SOCK_DGRAM, 0);
@@ -30,7 +32,9 @@ rudpfd_t socket_manager::create() noexcept {
     }
 
     rudpfd_t new_fd = m_next_fd++;
-    RUDP_ASSERT(m_next_fd >= 0, "fd counter overflow");
+
+    RUDP_ASSERT(m_sockets.find(new_fd) == m_sockets.end(),
+                "attempting to create with duplicate rudpfd");
 
     struct epoll_event ev;
     ev.events = EPOLLIN;
@@ -44,7 +48,8 @@ rudpfd_t socket_manager::create() noexcept {
     internal::socket socket{
         .fd = fd,
         .state = socket::CLOSED,
-        .cv = std::condition_variable{},
+        .mtx = std::make_unique<std::mutex>(),
+        .cv = std::make_unique<std::condition_variable>(),
         .listen_data =
             {
                 .backlog = -1,
@@ -63,7 +68,32 @@ internal::socket *socket_manager::get(rudpfd_t fd) noexcept {
     if (it == m_sockets.end()) {
         return nullptr;
     }
-    return &it->second;
+
+    socket *socket = &it->second;
+    RUDP_ASSERT(socket->fd >= 0, "all sockets should have a valid underlying fd");
+
+    return socket;
+}
+
+bool socket_manager::destroy(rudpfd_t fd) noexcept {
+    auto it = m_sockets.find(fd);
+    RUDP_ASSERT(it != m_sockets.end(), "attempting to destroy a non-existent socket");
+
+    socket &socket = it->second;
+    RUDP_ASSERT(socket.fd >= 0, "all sockets should have a valid underlying fd");
+
+    // TODO: Sockets in TIME_WAIT should be held for 2MSL and prevent us from reopening a connection
+    // with that peer. We are currently closing it early.
+    RUDP_ASSERT(socket.state == socket::CLOSED || socket.state == socket::TIME_WAIT,
+                "destroying an open socket");
+
+    int result = ::close(socket.fd);
+    if (result < 0) {
+        return false;
+    }
+
+    m_sockets.erase(it);
+    return true;
 }
 
 }  // namespace rudp::internal
