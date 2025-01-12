@@ -34,4 +34,6 @@ namespace constants {
     inline constexpr s32 UNINITIALISED_FD = -1;
 }
 
+RUDP_STATIC_ASSERT(constants::UNINITIALISED_FD < 0, "Uninitialised FD must be negative.");
+
 }  // namespace rudp

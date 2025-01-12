@@ -29,6 +29,8 @@ struct connection_pair_hash {
     RUDP_STATIC_ASSERT(sizeof(in_addr_t) == 4, "in_addr_t must be 32-bit.");
     RUDP_STATIC_ASSERT(sizeof(in_port_t) * 2 == sizeof(in_addr_t),
                        "in_port_t must pack into in_addr_t.");
+    RUDP_STATIC_ASSERT(sizeof(size_t) >= sizeof(u64),
+                       "size_t must be large enough to hold 64-bit hash value.");
 
     static constexpr u32 PHI = 0x9e3779b9;
 

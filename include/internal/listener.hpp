@@ -1,18 +1,22 @@
 #pragma once
 
+#include <sys/socket.h>
+
+#include <limits>
 #include <queue>
 
 #include "internal/common.hpp"
 
 namespace rudp::internal {
 
+RUDP_STATIC_ASSERT(SOMAXCONN <= std::numeric_limits<u16>::max(),
+                   "SOMAXCONN must fit in a u16 backlog.");
+
 class listener {
-    listener(u16 backlog) : m_fd(constants::UNINITIALISED_FD), m_backlog(backlog) {};
+public:
+    listener(linuxfd_t fd, u16 backlog) : m_fd(fd), m_backlog(backlog) {};
 
     [[nodiscard]] bool init() noexcept;
-
-    // std::mutex m_mtx;
-    // std::condition_variable m_cv;
 
 private:
     linuxfd_t m_fd;
