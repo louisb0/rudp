@@ -48,13 +48,13 @@ rudpfd_t socket_manager::create() noexcept {
     internal::socket socket{
         .fd = fd,
         .state = socket::CLOSED,
-        .mtx = std::make_unique<std::mutex>(),
-        .cv = std::make_unique<std::condition_variable>(),
         .listen_data =
             {
                 .backlog = -1,
                 .queue = std::queue<rudpfd_t>{},
             },
+        .mtx = std::make_unique<std::mutex>(),
+        .cv = std::make_unique<std::condition_variable>(),
     };
 
     RUDP_ASSERT(m_sockets.find(new_fd) == m_sockets.end(), "fd already exists");

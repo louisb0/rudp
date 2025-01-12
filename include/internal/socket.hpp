@@ -5,7 +5,7 @@
 #include <queue>
 #include <unordered_map>
 
-#include "common.hpp"
+#include "internal/common.hpp"
 
 namespace rudp::internal {
 
@@ -26,17 +26,16 @@ struct socket {
         LAST_ACK,
     } state;
 
-    // NOTE: Synchronisation primiatives are not movable, copyable, or deleteable. We manage sockets
-    // in containers which requires these properties, hence the unique_ptr. We assume a
-    // single-threaded user layer, so there are no race conditions around deletion.
-    std::unique_ptr<std::mutex> mtx;
-    std::unique_ptr<std::condition_variable> cv;
-
-    // TODO: Consider a union with connecting / listening socket types.
     struct listen_data_t {
         s32 backlog;
         std::queue<rudpfd_t> queue;
     } listen_data;
+
+    // NOTE: Synchronisation primiatives are not movable, copyable, or deleteable. We manage sockets
+    // in containers which requires these properties, hence the unique_ptr. We assume a
+    // single-threaded user layer - there are no race conditions around deletion.
+    std::unique_ptr<std::mutex> mtx;
+    std::unique_ptr<std::condition_variable> cv;
 };
 
 class socket_manager {

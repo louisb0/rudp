@@ -112,7 +112,6 @@ int close(rudpfd_t sockfd) {
     case internal::socket::CLOSED:
         break;
 
-    // NOTE: No connection is established, so nothing needs to be done to close.
     case internal::socket::SYN_SENT:
     case internal::socket::LISTENING:
         // TODO: Transition to CLOSED.
