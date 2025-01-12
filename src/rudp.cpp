@@ -2,7 +2,6 @@
 #include <sys/types.h>
 
 #include <memory>
-#include <mutex>
 
 #include "internal/common.hpp"
 #include "internal/listener.hpp"
@@ -33,6 +32,9 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) {
         errno = EOPNOTSUPP;
         return -1;
     }
+
+    RUDP_ASSERT(std::holds_alternative<std::monostate>(sock->data),
+                "A socket in the CREATED state must hold a std::monostate.");
 
     linuxfd_t fd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
@@ -71,18 +73,27 @@ int listen(int sockfd, int backlog) {
         return -1;
     }
 
+    RUDP_ASSERT(std::holds_alternative<linuxfd_t>(sock->data),
+                "A socket in the BOUND state must hold a linuxfd_t.");
+
+    // TODO: Would it be worthwhile validating the FD with a syscall instead of by-value?
     linuxfd_t fd = std::get<linuxfd_t>(sock->data);
-    RUDP_ASSERT(fd >= 0, "A bound socket must have a valid FD.");
+    RUDP_ASSERT(fd >= 0, "A socket in the BOUND state must hold a valid linuxfd_t.");
 
     auto listener = std::make_unique<internal::listener>(fd, backlog);
     if (!listener) {
         errno = ENOMEM;
         return -1;
     }
+
     if (!listener->init()) {
         // NOTE: This will only be reached when epoll fails, forwarding errno.
         return -1;
     }
+
+    // TODO: Consider whether this should be a post-invariant of listener::init().
+    RUDP_ASSERT(listener->assert_state(),
+                "This message will not be shown due to assert_state() calling RUDP_ASSERT");
 
     sock->type = internal::socket::type::LISTENING;
     sock->data = std::move(listener);
