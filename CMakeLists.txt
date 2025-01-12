@@ -28,8 +28,6 @@ string(APPEND CMAKE_CXX_FLAGS
 
 add_library(${PROJECT_NAME}
     src/rudp.cpp
-    src/socket.cpp
-    src/event_loop.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
