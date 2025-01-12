@@ -7,11 +7,24 @@ set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Weverything -Werror")
-elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wextra -Wpedantic -Werror")
-endif()
+string(APPEND CMAKE_CXX_FLAGS
+    " -Werror -Wall -Wextra -Wpedantic"
+    " -Wshadow"
+    " -Wnon-virtual-dtor"
+    " -Wold-style-cast"
+    " -Wcast-align"
+    " -Woverloaded-virtual"
+    " -Wconversion"
+    " -Wsign-conversion"
+    " -Wmisleading-indentation"
+    " -Wduplicated-cond"
+    " -Wduplicated-branches"
+    " -Wlogical-op"
+    " -Wnull-dereference"
+    " -Wuseless-cast"
+    " -Wdouble-promotion"
+    " -Wformat=2"
+)
 
 add_library(${PROJECT_NAME}
     src/rudp.cpp

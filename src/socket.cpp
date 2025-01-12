@@ -38,7 +38,7 @@ rudpfd_t socket_manager::create() noexcept {
 
     struct epoll_event ev;
     ev.events = EPOLLIN;
-    ev.data.u32 = new_fd;
+    ev.data.fd = new_fd;
 
     if (epoll_ctl(epollfd, EPOLL_CTL_ADD, fd, &ev) < 0) {
         close(fd);
