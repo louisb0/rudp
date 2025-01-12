@@ -9,13 +9,13 @@
 
 namespace rudp {
 
-int socket(void) {
+int socket(void) noexcept {
     rudpfd_t fd = internal::next_fd++;
     internal::g_sockets.emplace(fd);
     return fd;
 }
 
-int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) {
+int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     if (addr->sa_family != AF_INET) {
         errno = EAFNOSUPPORT;
         return -1;
@@ -55,7 +55,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) {
     return 0;
 }
 
-int listen(int sockfd, int backlog) {
+int listen(int sockfd, int backlog) noexcept {
     if (backlog < 0 || backlog > SOMAXCONN) {
         errno = EINVAL;
         return -1;
@@ -101,7 +101,7 @@ int listen(int sockfd, int backlog) {
     return 0;
 }
 
-int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
+int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     if (addr != nullptr) {
         if (addrlen == nullptr) {
             errno = EINVAL;
@@ -139,9 +139,9 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) {
     return listener->wait_and_accept();
 }
 
-int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen);
-size_t send(int sockfd, const void *buf, size_t len, int flags);
-size_t recv(int sockfd, void *buf, size_t len, int flags);
-int close(int sockfd);
+int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept;
+size_t send(int sockfd, const void *buf, size_t len, int flags) noexcept;
+size_t recv(int sockfd, void *buf, size_t len, int flags) noexcept;
+int close(int sockfd) noexcept;
 
 }  // namespace rudp
