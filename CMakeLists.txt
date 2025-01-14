@@ -28,6 +28,7 @@ string(APPEND CMAKE_CXX_FLAGS
 
 add_library(${PROJECT_NAME}
     src/rudp.cpp
+    src/socket.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
