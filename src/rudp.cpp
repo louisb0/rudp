@@ -23,6 +23,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
+    // Socket lookup and state validation.
     auto it = internal::g_sockets.find(sockfd);
     if (it == internal::g_sockets.end()) {
         errno = EBADF;
@@ -35,19 +36,21 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
+    // Bind the underlying FD.
     linuxfd_t fd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
         return -1;
     }
 
-    // NOTE: Validation of addr and addlen are being forwarded to the kernel.
     if (::bind(fd, addr, addrlen) < 0) {
+        // NOTE: If close() failed, we would have a leak of a bound socket here.
         int saved_errno = errno;
         ::close(fd);
         errno = saved_errno;
         return -1;
     }
 
+    // Update the socket state.
     sock->state = internal::socket::state::BOUND;
     sock->data.bound_fd = fd;
 
@@ -60,6 +63,7 @@ int listen(int sockfd, int backlog) noexcept {
         return -1;
     }
 
+    // Socket lookup and state validation.
     auto it = internal::g_sockets.find(sockfd);
     if (it == internal::g_sockets.end()) {
         errno = EBADF;
@@ -76,6 +80,7 @@ int listen(int sockfd, int backlog) noexcept {
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
                 "A socket in the BOUND state must hold a valid linuxfd_t.");
 
+    // Create and initialise the listener.
     auto listener = std::make_unique<internal::listener>(fd, backlog);
     if (!listener) {
         errno = ENOMEM;
@@ -83,12 +88,13 @@ int listen(int sockfd, int backlog) noexcept {
     }
 
     if (!listener->init()) {
-        // TODO: Consider what would be forwarded - is it user-friendly?
+        // TODO: Consider what would be forwarded from init() - is it user-friendly, or must it be
+        // proxied?
         return -1;
     }
-
     RUDP_ASSERT(listener->assert_state());
 
+    // Update the socket state.
     sock->state = internal::socket::state::LISTENING;
     sock->data.lstnr = std::move(listener);
 
@@ -97,17 +103,13 @@ int listen(int sockfd, int backlog) noexcept {
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     if (addr != nullptr) {
-        if (addrlen == nullptr) {
-            errno = EINVAL;
-            return -1;
-        }
-
-        if (*addrlen < sizeof(struct sockaddr)) {
+        if (addrlen == nullptr || *addrlen != sizeof(struct sockaddr_in)) {
             errno = EINVAL;
             return -1;
         }
     }
 
+    // Socket lookup and state validation.
     auto it = internal::g_sockets.find(sockfd);
     if (it == internal::g_sockets.end()) {
         errno = EBADF;
@@ -120,8 +122,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
         return -1;
     }
 
+    // Validate state of the listener & forward blocking accept call.
     auto &listener = sock->data.lstnr;
-
     RUDP_ASSERT(listener != nullptr,
                 "A socket in the LISTENING state must hold a non-null listener.");
     RUDP_ASSERT(listener->assert_state());
@@ -131,13 +133,14 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
         return -1;
     }
 
+    // Validate state of the accepted socket.
     RUDP_ASSERT(internal::g_sockets.contains(fd),
                 "wait_and_accept() must return a valid rudpfd_t.");
-
-    auto &accepted_sock = internal::g_sockets.at(fd);
-    RUDP_ASSERT(accepted_sock.state == internal::socket::state::CONNECTED,
+    RUDP_ASSERT(internal::g_sockets.at(fd).state == internal::socket::state::CONNECTED,
                 "Accepted socket must be in CONNECTED state.");
+    auto &accepted_sock = internal::g_sockets.at(fd);
 
+    // Fill out the callers addr and addrlen.
     if (addr != nullptr && addrlen != nullptr) {
         struct sockaddr_in peer_addr = {};
         peer_addr.sin_family = AF_INET;
@@ -152,7 +155,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
 }
 
 int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
-    if (addrlen < sizeof(struct sockaddr)) {
+    if (addrlen != sizeof(struct sockaddr_in)) {
         errno = EINVAL;
         return -1;
     }
@@ -162,6 +165,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
+    // Socket lookup and state validation.
     auto it = internal::g_sockets.find(sockfd);
     if (it == internal::g_sockets.end()) {
         errno = EBADF;
@@ -175,6 +179,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
+    // Ensure socket is bound, either existing or implicitly.
     if (sock->state != internal::socket::state::CREATED) {
         struct sockaddr_in bind_addr = {};
         bind_addr.sin_family = AF_INET;
@@ -185,10 +190,10 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
             return -1;
         }
     }
-
     RUDP_ASSERT(sock->state == internal::socket::state::BOUND,
                 "A socket must have an allocated port prior to becoming connected.");
 
+    // Get local address information for internal::connection_tuple.
     linuxfd_t fd = sock->data.bound_fd;
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
                 "A socket in the BOUND state must hold a valid linuxfd_t.");
@@ -199,6 +204,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
+    // Create and initialise the connection.
     internal::connection_tuple tuple = {
         .src_ip = local_addr.sin_addr.s_addr,
         .src_port = local_addr.sin_port,
@@ -206,14 +212,22 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         .dst_ip = (reinterpret_cast<struct sockaddr_in *>(addr))->sin_addr.s_addr,
     };
 
-    auto conn = std::make_unique<internal::connection>(tuple);
-    if (!conn->init()) {
-        // TODO: Consider what would be forwarded - is it user-friendly?
+    internal::connection conn(tuple);
+    if (!conn.init()) {
+        // TODO: Consider what would be forwarded from init() - is it user-friendly, or must it be
+        // proxied?
+        // NOTE: If close() failed, we would have a leak of a bound socket here.
+        int saved_errno = errno;
+        ::close(fd);
+        errno = saved_errno;
+
+        sock->state = internal::socket::state::CREATED;
+
         return -1;
     }
+    RUDP_ASSERT(conn.assert_state());
 
-    RUDP_ASSERT(conn->assert_state());
-
+    // Register the connection and update socket state.
     auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
     if (!inserted) {
         errno = EADDRINUSE;
