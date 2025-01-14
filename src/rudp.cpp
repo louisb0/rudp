@@ -235,7 +235,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     sock->state = internal::socket::state::CONNECTED;
-    sock->data.conn = tuple;
+    new (&sock->data.conn) internal::connection_tuple(tuple);
 
     return 0;
 }

@@ -11,12 +11,12 @@
 namespace rudp::internal {
 
 struct connection_tuple {
-    in_addr_t src_ip;
-    in_port_t src_port;
-    in_port_t dst_port;
-    in_addr_t dst_ip;
+    const in_addr_t src_ip;
+    const in_port_t src_port;
+    const in_port_t dst_port;
+    const in_addr_t dst_ip;
 
-    bool operator==(const connection_tuple &other) const {
+    [[nodiscard]] bool operator==(const connection_tuple &other) const noexcept {
         return src_ip == other.src_ip && src_port == other.src_port && dst_ip == other.dst_ip &&
                dst_port == other.dst_port;
     }
@@ -32,14 +32,12 @@ struct connection_tuple_hash {
     RUDP_STATIC_ASSERT(sizeof(size_t) >= sizeof(u64),
                        "size_t must be large enough to hold 64-bit hash value.");
 
-    static constexpr u32 PHI = 0x9e3779b9;
-
-    size_t operator()(const connection_tuple &t) const {
+    [[nodiscard]] size_t operator()(const connection_tuple &t) const noexcept {
         u64 seed = t.src_ip;
 
         u32 ports = (u32(t.src_port) << 16) | u32(t.dst_port);
-        seed ^= ports + PHI + (seed << 6) + (seed >> 2);
-        seed ^= t.dst_ip + PHI + (seed << 6) + (seed >> 2);
+        seed ^= ports + constants::PHI + (seed << 6) + (seed >> 2);
+        seed ^= t.dst_ip + constants::PHI + (seed << 6) + (seed >> 2);
 
         return seed;
     }
@@ -50,11 +48,11 @@ public:
     connection(connection_tuple tuple) : m_fd(constants::UNINITIALISED_FD), m_tuple(tuple) {}
     [[nodiscard]] bool init() noexcept;
 
-    [[nodiscard]] bool assert_state();
+    [[nodiscard]] bool assert_state() const noexcept;
 
 private:
     linuxfd_t m_fd;
-    connection_tuple m_tuple;
+    const connection_tuple m_tuple;
 };
 
 extern std::unordered_map<connection_tuple, connection, connection_tuple_hash> g_connections;

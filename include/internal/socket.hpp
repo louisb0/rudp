@@ -21,14 +21,13 @@ struct socket {
         storage() : bound_fd(constants::UNINITIALISED_FD) {}
         ~storage() {}
 
-        // Helper functions cleanup.
-        void destroy(enum state s) {
+        void destroy(enum state s) const noexcept {
             if (s == state::LISTENING) {
                 lstnr.~unique_ptr<listener>();
             }
         }
 
-        void construct_from(enum state s, storage &&other) {
+        void construct_from(enum state s, storage &&other) noexcept {
             switch (s) {
             case state::CREATED:
                 bound_fd = constants::UNINITIALISED_FD;
@@ -40,7 +39,7 @@ struct socket {
                 new (&lstnr) std::unique_ptr<listener>(std::move(other.lstnr));
                 break;
             case state::CONNECTED:
-                conn = other.conn;
+                new (&conn) connection_tuple(other.conn);
                 break;
             }
         }

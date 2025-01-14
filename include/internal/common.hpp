@@ -41,7 +41,8 @@ using rudpfd_t = s32;
 namespace internal {
     namespace constants {
         inline constexpr s32 UNINITIALISED_FD = -1;
-    }
+        inline constexpr u32 PHI = 0x9e3779b9;
+    }  // namespace constants
 
     inline bool is_valid_sockfd(linuxfd_t fd) {
         int opt;

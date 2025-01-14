@@ -19,7 +19,7 @@ public:
     listener(linuxfd_t fd, u16 backlog) : m_fd(fd), m_backlog(backlog) {};
     [[nodiscard]] bool init() noexcept;
 
-    [[nodiscard]] rudpfd_t wait_and_accept();
+    [[nodiscard]] rudpfd_t wait_and_accept() noexcept;
     // {
     // NOTE: It is not possible for the listener to be deleted from another thread while we are
     // blocked waiting for a connection to accept, as only the user-interface thread can perform
@@ -32,11 +32,11 @@ public:
     //     m_ready.pop();
     //     return fd;
     // }
-    [[nodiscard]] bool assert_state();
+    [[nodiscard]] bool assert_state() const noexcept;
 
 private:
-    linuxfd_t m_fd;
-    u16 m_backlog;
+    const linuxfd_t m_fd;
+    const u16 m_backlog;
 
     std::mutex m_mtx;
     std::condition_variable m_cv;
