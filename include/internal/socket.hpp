@@ -20,58 +20,51 @@ struct socket {
 
         storage() : bound_fd(constants::UNINITIALISED_FD) {}
         ~storage() {}
+
+        // Helper functions cleanup.
+        void destroy(enum state s) {
+            if (s == state::LISTENING) {
+                lstnr.~unique_ptr<listener>();
+            }
+        }
+
+        void construct_from(enum state s, storage &&other) {
+            switch (s) {
+            case state::CREATED:
+                bound_fd = constants::UNINITIALISED_FD;
+                break;
+            case state::BOUND:
+                bound_fd = other.bound_fd;
+                break;
+            case state::LISTENING:
+                new (&lstnr) std::unique_ptr<listener>(std::move(other.lstnr));
+                break;
+            case state::CONNECTED:
+                conn = other.conn;
+                break;
+            }
+        }
     } data;
 
     socket() : state(state::CREATED), data() {}
     ~socket() {
-        if (state == state::LISTENING) {
-            data.lstnr.std::unique_ptr<listener>::unique_ptr::~unique_ptr();
-        }
+        data.destroy(state);
     }
 
     socket(const socket &) = delete;
     socket &operator=(const socket &) = delete;
 
     socket(socket &&other) noexcept : state(other.state) {
-        switch (state) {
-        case state::CREATED:
-            break;
-        case state::BOUND:
-            data.bound_fd = other.data.bound_fd;
-            break;
-        case state::LISTENING:
-            new (&data.lstnr) std::unique_ptr<internal::listener>(std::move(other.data.lstnr));
-            break;
-        case state::CONNECTED:
-            data.conn = other.data.conn;
-            break;
-        }
+        data.construct_from(state, std::move(other.data));
         other.state = state::CREATED;
-        other.data.bound_fd = constants::UNINITIALISED_FD;
     }
 
     socket &operator=(socket &&other) noexcept {
         if (this != &other) {
-            if (state == state::LISTENING) {
-                data.lstnr.~unique_ptr<internal::listener>();
-            }
-
+            data.destroy(state);
             state = other.state;
-            switch (state) {
-            case state::CREATED:
-                break;
-            case state::BOUND:
-                data.bound_fd = other.data.bound_fd;
-                break;
-            case state::LISTENING:
-                new (&data.lstnr) std::unique_ptr<internal::listener>(std::move(other.data.lstnr));
-                break;
-            case state::CONNECTED:
-                data.conn = other.data.conn;
-                break;
-            }
+            data.construct_from(state, std::move(other.data));
             other.state = state::CREATED;
-            other.data.bound_fd = constants::UNINITIALISED_FD;
         }
         return *this;
     }
