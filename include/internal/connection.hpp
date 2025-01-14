@@ -57,6 +57,6 @@ private:
     connection_tuple m_tuple;
 };
 
-extern std::unordered_map<connection_tuple, connection> g_connections;
+extern std::unordered_map<connection_tuple, connection, connection_tuple_hash> g_connections;
 
 }  // namespace rudp::internal
