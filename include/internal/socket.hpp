@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <unordered_map>
-#include <variant>
 
 #include "internal/common.hpp"
 #include "internal/connection.hpp"
@@ -10,14 +9,72 @@
 
 namespace rudp::internal {
 
+// NOTE: std::variant is a valid alternative. I've heard it is slow but it would require measuring
+// in our use-case. I'm comfortable with this for now.
 struct socket {
-    // TODO: There is duplication between the variant and the enum which is state we have to keep in
-    // sync and an invariant we must assert throughout the program. std::variant is supposed to give
-    // us this for free. Is it worth it?
-    enum class type { CREATED, BOUND, LISTENING, CONNECTED } type;
-    std::variant<std::monostate, linuxfd_t, std::unique_ptr<listener>, connection_pair> data;
+    enum class state { CREATED, BOUND, LISTENING, CONNECTED } state;
+    union storage {
+        linuxfd_t bound_fd;
+        std::unique_ptr<listener> lstnr;
+        connection_tuple conn;
 
-    socket() : type(type::CREATED), data(std::monostate{}) {}
+        storage() : bound_fd(constants::UNINITIALISED_FD) {}
+        ~storage() {}
+    } data;
+
+    socket() : state(state::CREATED), data() {}
+    ~socket() {
+        if (state == state::LISTENING) {
+            data.lstnr.std::unique_ptr<listener>::unique_ptr::~unique_ptr();
+        }
+    }
+
+    socket(const socket &) = delete;
+    socket &operator=(const socket &) = delete;
+
+    socket(socket &&other) noexcept : state(other.state) {
+        switch (state) {
+        case state::CREATED:
+            break;
+        case state::BOUND:
+            data.bound_fd = other.data.bound_fd;
+            break;
+        case state::LISTENING:
+            new (&data.lstnr) std::unique_ptr<internal::listener>(std::move(other.data.lstnr));
+            break;
+        case state::CONNECTED:
+            data.conn = other.data.conn;
+            break;
+        }
+        other.state = state::CREATED;
+        other.data.bound_fd = constants::UNINITIALISED_FD;
+    }
+
+    socket &operator=(socket &&other) noexcept {
+        if (this != &other) {
+            if (state == state::LISTENING) {
+                data.lstnr.~unique_ptr<internal::listener>();
+            }
+
+            state = other.state;
+            switch (state) {
+            case state::CREATED:
+                break;
+            case state::BOUND:
+                data.bound_fd = other.data.bound_fd;
+                break;
+            case state::LISTENING:
+                new (&data.lstnr) std::unique_ptr<internal::listener>(std::move(other.data.lstnr));
+                break;
+            case state::CONNECTED:
+                data.conn = other.data.conn;
+                break;
+            }
+            other.state = state::CREATED;
+            other.data.bound_fd = constants::UNINITIALISED_FD;
+        }
+        return *this;
+    }
 };
 
 extern rudpfd_t next_fd;

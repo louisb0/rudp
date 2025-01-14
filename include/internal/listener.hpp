@@ -17,8 +17,8 @@ RUDP_STATIC_ASSERT(SOMAXCONN <= std::numeric_limits<u16>::max(),
 class listener {
 public:
     listener(linuxfd_t fd, u16 backlog) : m_fd(fd), m_backlog(backlog) {};
-
     [[nodiscard]] bool init() noexcept;
+
     [[nodiscard]] rudpfd_t wait_and_accept();
     // {
     // NOTE: It is not possible for the listener to be deleted from another thread while we are

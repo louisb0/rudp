@@ -1,12 +1,19 @@
 #pragma once
 
+#include <sys/socket.h>
+
 #include <cassert>
 #include <cstdint>
 
+#define RUDP_GET_MACRO(_1, _2, NAME, ...) NAME
+#define RUDP_ASSERT(...) RUDP_GET_MACRO(__VA_ARGS__, RUDP_ASSERT2, RUDP_ASSERT1)(__VA_ARGS__)
+#define RUDP_ASSERT1(cond) RUDP_ASSERT2(cond, "Assertion failed")
+#define RUDP_ASSERT2(cond, msg) assert((cond) && __FILE__ ":" RUDP_STRINGIFY(__LINE__) ": " msg)
+
 #define RUDP_STATIC_ASSERT(cond, msg) \
     static_assert(cond, __FILE__ ":" RUDP_STRINGIFY(__LINE__) ": " msg)
-#define RUDP_ASSERT(cond, msg) assert((cond) && __FILE__ ":" RUDP_STRINGIFY(__LINE__) ": " msg)
 #define RUDP_UNREACHABLE() RUDP_ASSERT(false, "Unreachable");
+
 #define RUDP_STRINGIFY(x) RUDP_STRINGIFY2(x)
 #define RUDP_STRINGIFY2(x) #x
 
@@ -30,10 +37,19 @@ using b8 = bool;
 using linuxfd_t = s32;
 using rudpfd_t = s32;
 
-namespace constants {
-    inline constexpr s32 UNINITIALISED_FD = -1;
-}
+// TODO: Reconsider this organisation.
+namespace internal {
+    namespace constants {
+        inline constexpr s32 UNINITIALISED_FD = -1;
+    }
 
-RUDP_STATIC_ASSERT(constants::UNINITIALISED_FD < 0, "Uninitialised FD must be negative.");
+    inline bool is_valid_sockfd(linuxfd_t fd) {
+        int opt;
+        socklen_t opt_len = sizeof(opt);
+        return getsockopt(fd, SOL_SOCKET, SO_TYPE, &opt, &opt_len) != -1;
+    }
+}  // namespace internal
+
+RUDP_STATIC_ASSERT(internal::constants::UNINITIALISED_FD < 0, "Uninitialised FD must be negative.");
 
 }  // namespace rudp
