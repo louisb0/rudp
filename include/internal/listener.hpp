@@ -16,27 +16,18 @@ RUDP_STATIC_ASSERT(SOMAXCONN <= std::numeric_limits<u16>::max(),
 
 class listener {
 public:
-    listener(linuxfd_t fd, u16 backlog) : m_fd(fd), m_backlog(backlog) {};
+    listener(rudpfd_t rudpfd, linuxfd_t linuxfd, u16 backlog)
+        : m_rudpfd(rudpfd), m_linuxfd(linuxfd), m_backlog(backlog), m_initialised(false) {};
     [[nodiscard]] bool init() noexcept;
 
     [[nodiscard]] rudpfd_t wait_and_accept() noexcept;
-    // {
-    // NOTE: It is not possible for the listener to be deleted from another thread while we are
-    // blocked waiting for a connection to accept, as only the user-interface thread can perform
-    // that action.
-    //
-    //     std::unique_lock<std::mutex> lock(m_mtx);
-    //     m_cv.wait(lock, [this]() { return !m_ready.empty(); });
-    //
-    //     rudpfd_t fd = m_ready.front();
-    //     m_ready.pop();
-    //     return fd;
-    // }
-    [[nodiscard]] bool assert_state() const noexcept;
+    [[nodiscard]] bool assert_initialised_state() const noexcept;
 
 private:
-    const linuxfd_t m_fd;
+    const rudpfd_t m_rudpfd;
+    const linuxfd_t m_linuxfd;
     const u16 m_backlog;
+    bool m_initialised;
 
     std::mutex m_mtx;
     std::condition_variable m_cv;

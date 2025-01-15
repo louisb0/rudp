@@ -1,10 +1,14 @@
 #pragma once
 
+#include <sys/epoll.h>
 #include <sys/socket.h>
 
 #include <cassert>
+#include <cerrno>
+#include <cstddef>
 #include <cstdint>
 
+// TODO: The formatting on these are very broken.
 #define RUDP_GET_MACRO(_1, _2, NAME, ...) NAME
 #define RUDP_ASSERT(...) RUDP_GET_MACRO(__VA_ARGS__, RUDP_ASSERT2, RUDP_ASSERT1)(__VA_ARGS__)
 #define RUDP_ASSERT1(cond) RUDP_ASSERT2(cond, "Assertion failed")
@@ -34,6 +38,7 @@ using f64 = double;
 
 using b8 = bool;
 
+// TODO: Consider new names for linuxfd_t as it's not a linux-specific concept.
 using linuxfd_t = s32;
 using rudpfd_t = s32;
 
@@ -44,10 +49,21 @@ namespace internal {
         inline constexpr u32 PHI = 0x9e3779b9;
     }  // namespace constants
 
+    template <typename F>
+    void preserve_errno(F cleanup) {
+        int saved_errno = errno;
+        cleanup();
+        errno = saved_errno;
+    }
+
     inline bool is_valid_sockfd(linuxfd_t fd) {
         int opt;
         socklen_t opt_len = sizeof(opt);
         return getsockopt(fd, SOL_SOCKET, SO_TYPE, &opt, &opt_len) != -1;
+    }
+
+    inline bool is_valid_epollfd(linuxfd_t fd) {
+        return epoll_wait(fd, NULL, 0, 0) != -1 || errno == EINTR;
     }
 }  // namespace internal
 

@@ -44,9 +44,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
 
     if (::bind(fd, addr, addrlen) < 0) {
         // NOTE: If close() failed, we would have a leak of a bound socket here.
-        int saved_errno = errno;
-        ::close(fd);
-        errno = saved_errno;
+        internal::preserve_errno([fd]() { ::close(fd); });
         return -1;
     }
 
@@ -81,7 +79,7 @@ int listen(int sockfd, int backlog) noexcept {
                 "A socket in the BOUND state must hold a valid linuxfd_t.");
 
     // Create and initialise the listener.
-    auto listener = std::make_unique<internal::listener>(fd, backlog);
+    auto listener = std::make_unique<internal::listener>(sockfd, fd, backlog);
     if (!listener) {
         errno = ENOMEM;
         return -1;
@@ -92,7 +90,7 @@ int listen(int sockfd, int backlog) noexcept {
         // proxied?
         return -1;
     }
-    RUDP_ASSERT(listener->assert_state());
+    RUDP_ASSERT(listener->assert_initialised_state());
 
     // Update the socket state.
     sock->state = internal::socket::state::LISTENING;
@@ -126,7 +124,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     auto &listener = sock->data.lstnr;
     RUDP_ASSERT(listener != nullptr,
                 "A socket in the LISTENING state must hold a non-null listener.");
-    RUDP_ASSERT(listener->assert_state());
+    RUDP_ASSERT(listener->assert_initialised_state());
 
     rudpfd_t fd = listener->wait_and_accept();
     if (fd < 0) {
@@ -217,10 +215,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         // TODO: Consider what would be forwarded from init() - is it user-friendly, or must it be
         // proxied?
         // NOTE: If close() failed, we would have a leak of a bound socket here.
-        int saved_errno = errno;
-        ::close(fd);
-        errno = saved_errno;
-
+        internal::preserve_errno([fd]() { ::close(fd); });
         sock->state = internal::socket::state::CREATED;
 
         return -1;
