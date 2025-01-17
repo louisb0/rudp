@@ -21,7 +21,7 @@ public:
     [[nodiscard]] bool init() noexcept;
 
     [[nodiscard]] rudpfd_t wait_and_accept() noexcept;
-    [[nodiscard]] bool assert_initialised_state() const noexcept;
+    [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;
 
 private:
     const rudpfd_t m_rudpfd;

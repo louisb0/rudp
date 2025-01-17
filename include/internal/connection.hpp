@@ -48,7 +48,7 @@ public:
     connection(connection_tuple tuple) : m_fd(constants::UNINITIALISED_FD), m_tuple(tuple) {}
     [[nodiscard]] bool init() noexcept;
 
-    [[nodiscard]] bool assert_state() const noexcept;
+    [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;
 
 private:
     linuxfd_t m_fd;

@@ -7,19 +7,35 @@
 #include <cerrno>
 #include <cstddef>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 
-// TODO: The formatting on these are very broken.
-#define RUDP_GET_MACRO(_1, _2, NAME, ...) NAME
-#define RUDP_ASSERT(...) RUDP_GET_MACRO(__VA_ARGS__, RUDP_ASSERT2, RUDP_ASSERT1)(__VA_ARGS__)
-#define RUDP_ASSERT1(cond) RUDP_ASSERT2(cond, "Assertion failed")
-#define RUDP_ASSERT2(cond, msg) assert((cond) && __FILE__ ":" RUDP_STRINGIFY(__LINE__) ": " msg)
+#define RUDP_ASSERT_1(condition)                                         \
+    do {                                                                 \
+        if (!(condition)) {                                              \
+            fprintf(stderr, "Assertion failed: %s\n", #condition);       \
+            fprintf(stderr, "File: %s, Line: %d\n", __FILE__, __LINE__); \
+            abort();                                                     \
+        }                                                                \
+    } while (0)
 
-#define RUDP_STATIC_ASSERT(cond, msg) \
-    static_assert(cond, __FILE__ ":" RUDP_STRINGIFY(__LINE__) ": " msg)
-#define RUDP_UNREACHABLE() RUDP_ASSERT(false, "Unreachable");
+#define RUDP_ASSERT_N(condition, ...)                                      \
+    do {                                                                   \
+        if (!(condition)) {                                                \
+            fprintf(stderr, "Assertion failed: %s\n", #condition);         \
+            fprintf(stderr, "Message: ");                                  \
+            fprintf(stderr, __VA_ARGS__);                                  \
+            fprintf(stderr, "\nFile: %s, Line: %d\n", __FILE__, __LINE__); \
+            abort();                                                       \
+        }                                                                  \
+    } while (0)
 
-#define RUDP_STRINGIFY(x) RUDP_STRINGIFY2(x)
-#define RUDP_STRINGIFY2(x) #x
+#define _RUDP_GET_MACRO(_1, _2, _3, _4, _5, NAME, ...) NAME
+
+#define RUDP_ASSERT(...)                                                                     \
+    _RUDP_GET_MACRO(__VA_ARGS__, RUDP_ASSERT_N, RUDP_ASSERT_N, RUDP_ASSERT_N, RUDP_ASSERT_N, \
+                    RUDP_ASSERT_1)(__VA_ARGS__)
+#define RUDP_STATIC_ASSERT(condition, ...) static_assert(condition)
 
 namespace rudp {
 

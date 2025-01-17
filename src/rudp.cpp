@@ -86,11 +86,9 @@ int listen(int sockfd, int backlog) noexcept {
     }
 
     if (!listener->init()) {
-        // TODO: Consider what would be forwarded from init() - is it user-friendly, or must it be
-        // proxied?
         return -1;
     }
-    RUDP_ASSERT(listener->assert_initialised_state());
+    RUDP_ASSERT(listener->assert_initialised_state(__PRETTY_FUNCTION__));
 
     // Update the socket state.
     sock->state = internal::socket::state::LISTENING;
@@ -124,7 +122,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     auto &listener = sock->data.lstnr;
     RUDP_ASSERT(listener != nullptr,
                 "A socket in the LISTENING state must hold a non-null listener.");
-    RUDP_ASSERT(listener->assert_initialised_state());
+    RUDP_ASSERT(listener->assert_initialised_state(__PRETTY_FUNCTION__));
 
     rudpfd_t fd = listener->wait_and_accept();
     if (fd < 0) {
@@ -220,7 +218,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
 
         return -1;
     }
-    RUDP_ASSERT(conn.assert_state());
+    RUDP_ASSERT(conn.assert_initialised_state(__PRETTY_FUNCTION__));
 
     // Register the connection and update socket state.
     auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));

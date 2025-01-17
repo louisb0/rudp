@@ -86,17 +86,18 @@ bool event_loop::init_thread() noexcept {
 }
 
 linuxfd_t event_loop::epollfd() const noexcept {
-    RUDP_ASSERT(assert_initialised_state());
+    RUDP_ASSERT(assert_initialised_state(__PRETTY_FUNCTION__));
 
     return m_epollfd;
 }
 
-// NOTE: We won't know who called this.
-bool event_loop::assert_initialised_state() const noexcept {
+bool event_loop::assert_initialised_state(const char *caller) const noexcept {
     RUDP_ASSERT(m_epollfd != constants::UNINITIALISED_FD,
-                "A running event loop must have an initialised epollfd.");
-    RUDP_ASSERT(is_valid_sockfd(m_epollfd), "A running event loop must have a valid epollfd.");
-    RUDP_ASSERT(m_thread.joinable(), "A running event loop must have a respective running thread.");
+                "[%s] A running event loop must have an initialised epollfd.", caller);
+    RUDP_ASSERT(is_valid_sockfd(m_epollfd), "[%s] A running event loop must have a valid epollfd.",
+                caller);
+    RUDP_ASSERT(m_thread.joinable(),
+                "[%s] A running event loop must have a respective running thread.", caller);
 
     return true;
 }
