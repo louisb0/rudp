@@ -8,6 +8,7 @@
 #include <mutex>
 #include <thread>
 
+#include "internal/assert.hpp"
 #include "internal/common.hpp"
 
 namespace rudp::internal {
@@ -82,6 +83,39 @@ bool event_loop::init_thread() noexcept {
         return false;
     }
 
+    return true;
+}
+
+bool event_loop::add_handler(event_handler *handler) {
+    auto [err, event_loop] = instance();
+
+    switch (err) {
+    case result::error::thread_creation:
+        errno = ENOMEM;
+        return false;
+
+    case result::error::epoll_creation:
+        // NOTE: In this case, errno would be set by epoll_create.
+        return false;
+
+    case result::error::none:
+        break;
+    }
+
+    RUDP_ASSERT(!handler->m_initialised, "A handler must not be initialised twice.");
+
+    struct epoll_event ev;
+    ev.events = EPOLLIN;
+    ev.data.fd = handler->fd();
+
+    if (epoll_ctl(event_loop->m_epollfd, EPOLL_CTL_ADD, handler->fd(), &ev) < 0) {
+        // NOTE: By way of the guarantees provided by RUDP_ASSERT, the only two possible errors we
+        // could get are ENOMEM and ENOSPC, both of which are fine to return back to the user.
+        return false;
+    }
+
+    event_loop->m_handlers[handler->fd()] = handler;
+    handler->m_initialised = true;
     return true;
 }
 

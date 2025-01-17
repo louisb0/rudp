@@ -1,11 +1,13 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+#include <cerrno>
 #include <cstring>
 #include <memory>
 
 #include "internal/common.hpp"
 #include "internal/connection.hpp"
+#include "internal/event_loop.hpp"
 #include "internal/listener.hpp"
 #include "internal/socket.hpp"
 
@@ -79,15 +81,17 @@ int listen(int sockfd, int backlog) noexcept {
                 "A socket in the BOUND state must hold a valid linuxfd_t.");
 
     // Create and initialise the listener.
-    auto listener = std::make_unique<internal::listener>(sockfd, fd, backlog);
+    auto listener = std::make_unique<internal::listener>(fd, backlog);
     if (!listener) {
         errno = ENOMEM;
         return -1;
     }
 
-    if (!listener->init()) {
+    if (!internal::event_loop::add_handler(listener.get())) {
+        // NOTE: add_handler() sets errno.
         return -1;
     }
+
     RUDP_ASSERT(listener->assert_initialised_state(__PRETTY_FUNCTION__));
 
     // Update the socket state.
@@ -208,17 +212,18 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         .dst_ip = (reinterpret_cast<struct sockaddr_in *>(addr))->sin_addr.s_addr,
     };
 
-    internal::connection conn(tuple);
-    if (!conn.init()) {
-        // TODO: Consider what would be forwarded from init() - is it user-friendly, or must it be
-        // proxied?
-        // NOTE: If close() failed, we would have a leak of a bound socket here.
-        internal::preserve_errno([fd]() { ::close(fd); });
-        sock->state = internal::socket::state::created;
-
+    auto conn = std::make_unique<internal::connection>(fd, tuple);
+    if (!conn) {
+        errno = ENOMEM;
         return -1;
     }
-    RUDP_ASSERT(conn.assert_initialised_state(__PRETTY_FUNCTION__));
+
+    if (!internal::event_loop::add_handler(conn.get())) {
+        // NOTE: add_handler() sets errno.
+        return -1;
+    }
+
+    RUDP_ASSERT(conn->assert_initialised_state(__PRETTY_FUNCTION__));
 
     // Register the connection and update socket state.
     auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));

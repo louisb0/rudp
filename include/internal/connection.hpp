@@ -8,6 +8,7 @@
 
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
+#include "internal/event_loop.hpp"
 
 namespace rudp::internal {
 
@@ -44,11 +45,11 @@ struct connection_tuple_hash {
     }
 };
 
-class connection {
+class connection : public event_handler {
 public:
-    connection(connection_tuple tuple) noexcept
-        : m_fd(constants::UNINITIALISED_FD), m_tuple(tuple) {}
-    [[nodiscard]] bool init() noexcept;
+    connection(linuxfd_t fd, connection_tuple tuple) noexcept : event_handler(fd), m_tuple(tuple) {}
+
+    void handle_event() noexcept;
 
     [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;
 
@@ -57,6 +58,7 @@ private:
     const connection_tuple m_tuple;
 };
 
-extern std::unordered_map<connection_tuple, connection, connection_tuple_hash> g_connections;
+extern std::unordered_map<connection_tuple, std::unique_ptr<connection>, connection_tuple_hash>
+    g_connections;
 
 }  // namespace rudp::internal
