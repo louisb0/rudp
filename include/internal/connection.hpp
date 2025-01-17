@@ -4,11 +4,12 @@
 #include <netinet/in.h>
 
 #include <cstddef>
+#include <memory>
 #include <unordered_map>
 
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
-#include "internal/event_loop.hpp"
+#include "internal/event_handler.hpp"
 
 namespace rudp::internal {
 
@@ -50,8 +51,6 @@ public:
     connection(linuxfd_t fd, connection_tuple tuple) noexcept : event_handler(fd), m_tuple(tuple) {}
 
     void handle_event() noexcept;
-
-    [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;
 
 private:
     linuxfd_t m_fd;

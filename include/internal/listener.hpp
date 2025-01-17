@@ -9,7 +9,7 @@
 
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
-#include "internal/event_loop.hpp"
+#include "internal/event_handler.hpp"
 
 namespace rudp::internal {
 
@@ -19,12 +19,10 @@ RUDP_STATIC_ASSERT(SOMAXCONN <= std::numeric_limits<u16>::max(),
 class listener : public event_handler {
 public:
     listener(linuxfd_t fd, u16 backlog) noexcept : event_handler(fd), m_backlog(backlog) {}
-    [[nodiscard]] bool init() noexcept;
 
     void handle_event() noexcept;
 
     [[nodiscard]] rudpfd_t wait_and_accept() noexcept;
-    [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;
 
 private:
     const u16 m_backlog;
