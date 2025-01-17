@@ -7,6 +7,7 @@
 #include <mutex>
 #include <queue>
 
+#include "internal/assert.hpp"
 #include "internal/common.hpp"
 
 namespace rudp::internal {

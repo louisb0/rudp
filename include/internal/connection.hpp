@@ -6,6 +6,7 @@
 #include <cstddef>
 #include <unordered_map>
 
+#include "internal/assert.hpp"
 #include "internal/common.hpp"
 
 namespace rudp::internal {
