@@ -9,6 +9,10 @@
 namespace rudp::internal {
 
 class event_handler {
+    // NOTE: This is purely so that when registering an event_handler, we can both get and set
+    // m_initialised. I don't like this, but I'm not a fan of getters/setters, and this seems to
+    // beat making m_initialised public.
+    // TODO: Come up with something better.
     friend class event_loop;
 
 public:
