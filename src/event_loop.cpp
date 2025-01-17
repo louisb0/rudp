@@ -71,7 +71,7 @@ event_loop::result event_loop::instance() noexcept {
 
             // NOTE: This is not entirely safe and we could leave an event-loop running detached if
             // the OS is slow to schedule the thread. The complexity to make this reliable will take
-            // away from the purpose of the project - networking.
+            // away from the purpose of the project: networking.
             bool started = loop->m_thread_started.get_future().wait_for(thread_start_timeout) ==
                            std::future_status::ready;
             if (!started) {
@@ -92,7 +92,7 @@ event_loop::result event_loop::instance() noexcept {
     return {.err = error, .instance = instance};
 }
 
-bool event_loop::add_handler(event_handler *handler) {
+bool event_loop::add_handler(event_handler *handler) noexcept {
     RUDP_ASSERT(handler, "A handler should never be null.");
 
     // Get event loop and assert state.
@@ -122,9 +122,30 @@ bool event_loop::add_handler(event_handler *handler) {
 
     // Register the handler and update state.
     event_loop->m_handlers[handler->fd()] = handler;
+
     handler->m_initialised = true;
     handler->m_event_loop = event_loop;
+
     RUDP_ASSERT(handler->assert_initialised_handler(__PRETTY_FUNCTION__));
+
+    return true;
+}
+
+bool event_loop::remove_handler(event_handler *handler) noexcept {
+    RUDP_ASSERT(handler, "A handler should never be null.");
+    RUDP_ASSERT(handler->assert_initialised_handler(__PRETTY_FUNCTION__));
+
+    auto event_loop = handler->m_event_loop;
+
+    if (epoll_ctl(event_loop->m_epollfd, EPOLL_CTL_DEL, handler->fd(), nullptr) < 0) {
+        // NOTE: errno would be set as ENOMEM or ENOSPC by epoll_ctl.
+        return false;
+    }
+
+    event_loop->m_handlers.erase(handler->fd());
+
+    handler->m_initialised = false;
+    handler->m_event_loop = nullptr;
 
     return true;
 }

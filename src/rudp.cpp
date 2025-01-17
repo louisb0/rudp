@@ -226,6 +226,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     // Register the connection and update socket state.
     auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
     if (!inserted) {
+        internal::event_loop::remove_handler(conn.get());
         errno = EADDRINUSE;
         return -1;
     }

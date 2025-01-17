@@ -30,8 +30,8 @@ public:
     };
 
     [[nodiscard]] static result instance() noexcept;
-    [[nodiscard]] static bool add_handler(event_handler *handler);
-    [[nodiscard]] static bool remove_handler(event_handler *handler);
+    [[nodiscard]] static bool add_handler(event_handler *handler) noexcept;
+    static bool remove_handler(event_handler *handler) noexcept;
 
     void loop() noexcept;
 
