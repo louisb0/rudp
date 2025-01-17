@@ -45,7 +45,8 @@ struct connection_tuple_hash {
 
 class connection {
 public:
-    connection(connection_tuple tuple) : m_fd(constants::UNINITIALISED_FD), m_tuple(tuple) {}
+    connection(connection_tuple tuple) noexcept
+        : m_fd(constants::UNINITIALISED_FD), m_tuple(tuple) {}
     [[nodiscard]] bool init() noexcept;
 
     [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;

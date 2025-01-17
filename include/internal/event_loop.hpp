@@ -9,8 +9,7 @@ namespace rudp::internal {
 
 class event_loop {
 public:
-    // TODO: Add noexcept to constructors.
-    event_loop() : m_epollfd(constants::UNINITIALISED_FD) {}
+    event_loop() noexcept : m_epollfd(constants::UNINITIALISED_FD) {}
 
     event_loop(const event_loop &) = delete;
     event_loop &operator=(const event_loop &) = delete;

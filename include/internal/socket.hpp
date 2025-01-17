@@ -9,8 +9,8 @@
 
 namespace rudp::internal {
 
-// NOTE: std::variant is a valid alternative. I've heard it is slow but it would require measuring
-// in our use-case. I'm comfortable with this for now.
+// NOTE: std::variant is a valid alternative but you supposedly pay for it's convenience with speed
+// (though we would need to measure it to be sure).
 struct socket {
     enum class state { created, bound, listening, connected } state;
     union storage {
@@ -18,8 +18,8 @@ struct socket {
         std::unique_ptr<listener> lstnr;
         connection_tuple conn;
 
-        storage() : bound_fd(constants::UNINITIALISED_FD) {}
-        ~storage() {}
+        storage() noexcept : bound_fd(constants::UNINITIALISED_FD) {}
+        ~storage() noexcept {}
 
         void destroy(enum state s) const noexcept {
             if (s == state::listening) {
@@ -45,8 +45,8 @@ struct socket {
         }
     } data;
 
-    socket() : state(state::created), data() {}
-    ~socket() {
+    socket() noexcept : state(state::created), data() {}
+    ~socket() noexcept {
         data.destroy(state);
     }
 

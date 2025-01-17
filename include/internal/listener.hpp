@@ -16,7 +16,7 @@ RUDP_STATIC_ASSERT(SOMAXCONN <= std::numeric_limits<u16>::max(),
 
 class listener {
 public:
-    listener(rudpfd_t rudpfd, linuxfd_t linuxfd, u16 backlog)
+    listener(rudpfd_t rudpfd, linuxfd_t linuxfd, u16 backlog) noexcept
         : m_rudpfd(rudpfd), m_linuxfd(linuxfd), m_backlog(backlog), m_initialised(false) {};
     [[nodiscard]] bool init() noexcept;
 
