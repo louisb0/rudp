@@ -31,7 +31,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::CREATED) {
+    if (sock->state != internal::socket::state::created) {
         errno = EOPNOTSUPP;
         return -1;
     }
@@ -49,7 +49,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     // Update the socket state.
-    sock->state = internal::socket::state::BOUND;
+    sock->state = internal::socket::state::bound;
     sock->data.bound_fd = fd;
 
     return 0;
@@ -69,7 +69,7 @@ int listen(int sockfd, int backlog) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::BOUND) {
+    if (sock->state != internal::socket::state::bound) {
         errno = EOPNOTSUPP;
         return -1;
     }
@@ -91,7 +91,7 @@ int listen(int sockfd, int backlog) noexcept {
     RUDP_ASSERT(listener->assert_initialised_state(__PRETTY_FUNCTION__));
 
     // Update the socket state.
-    sock->state = internal::socket::state::LISTENING;
+    sock->state = internal::socket::state::listening;
     sock->data.lstnr = std::move(listener);
 
     return 0;
@@ -113,7 +113,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::LISTENING) {
+    if (sock->state != internal::socket::state::listening) {
         errno = EOPNOTSUPP;
         return -1;
     }
@@ -132,7 +132,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     // Validate state of the accepted socket.
     RUDP_ASSERT(internal::g_sockets.contains(fd),
                 "wait_and_accept() must return a valid rudpfd_t.");
-    RUDP_ASSERT(internal::g_sockets.at(fd).state == internal::socket::state::CONNECTED,
+    RUDP_ASSERT(internal::g_sockets.at(fd).state == internal::socket::state::connected,
                 "Accepted socket must be in CONNECTED state.");
     auto &accepted_sock = internal::g_sockets.at(fd);
 
@@ -169,14 +169,14 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::CREATED &&
-        sock->state != internal::socket::state::BOUND) {
+    if (sock->state != internal::socket::state::created &&
+        sock->state != internal::socket::state::bound) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
     // Ensure socket is bound, either existing or implicitly.
-    if (sock->state != internal::socket::state::CREATED) {
+    if (sock->state != internal::socket::state::created) {
         struct sockaddr_in bind_addr = {};
         bind_addr.sin_family = AF_INET;
         bind_addr.sin_addr.s_addr = INADDR_ANY;
@@ -186,7 +186,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
             return -1;
         }
     }
-    RUDP_ASSERT(sock->state == internal::socket::state::BOUND,
+    RUDP_ASSERT(sock->state == internal::socket::state::bound,
                 "A socket must have an allocated port prior to becoming connected.");
 
     // Get local address information for internal::connection_tuple.
@@ -214,7 +214,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         // proxied?
         // NOTE: If close() failed, we would have a leak of a bound socket here.
         internal::preserve_errno([fd]() { ::close(fd); });
-        sock->state = internal::socket::state::CREATED;
+        sock->state = internal::socket::state::created;
 
         return -1;
     }
@@ -227,7 +227,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
-    sock->state = internal::socket::state::CONNECTED;
+    sock->state = internal::socket::state::connected;
     new (&sock->data.conn) internal::connection_tuple(tuple);
 
     return 0;

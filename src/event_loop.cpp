@@ -25,27 +25,27 @@ void event_loop::loop() noexcept {
 event_loop::result event_loop::instance() noexcept {
     static std::once_flag initialise;
     static event_loop *instance = nullptr;
-    static result::error error = result::error::NONE;
+    static result::error error = result::error::none;
 
     std::call_once(initialise, []() {
         auto temp = std::make_unique<event_loop>();
 
         if (!temp->init_epoll()) {
-            error = result::error::EPOLL_CREATION;
+            error = result::error::epoll_creation;
             return;
         }
 
         if (!temp->init_thread()) {
             close(temp->m_epollfd);
 
-            error = result::error::THREAD_CREATION;
+            error = result::error::thread_creation;
             return;
         }
 
         instance = temp.release();
     });
 
-    RUDP_ASSERT(error == result::error::NONE, "All errors must prevent event loop initialisation.");
+    RUDP_ASSERT(error == result::error::none, "All errors must prevent event loop initialisation.");
     return {.err = error, .instance = instance};
 }
 

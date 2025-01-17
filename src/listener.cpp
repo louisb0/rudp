@@ -17,7 +17,7 @@ bool listener::init() noexcept {
     RUDP_ASSERT(!m_initialised, "A listener must not be initialised twice.");
 
     auto [err, event_loop] = event_loop::instance();
-    if (err != event_loop::result::error::NONE) {
+    if (err != event_loop::result::error::none) {
         return false;
     }
 
@@ -59,7 +59,7 @@ bool listener::assert_initialised_state(const char *caller) const noexcept {
     // Event-loop state
     auto [err, event_loop] = event_loop::instance();
 
-    RUDP_ASSERT(err == event_loop::result::error::NONE,
+    RUDP_ASSERT(err == event_loop::result::error::none,
                 "[%s] For a listener to exist, the event loop creation must not have failed.",
                 caller);
     RUDP_ASSERT(event_loop != nullptr,

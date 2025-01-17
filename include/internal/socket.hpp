@@ -12,7 +12,7 @@ namespace rudp::internal {
 // NOTE: std::variant is a valid alternative. I've heard it is slow but it would require measuring
 // in our use-case. I'm comfortable with this for now.
 struct socket {
-    enum class state { CREATED, BOUND, LISTENING, CONNECTED } state;
+    enum class state { created, bound, listening, connected } state;
     union storage {
         linuxfd_t bound_fd;
         std::unique_ptr<listener> lstnr;
@@ -22,30 +22,30 @@ struct socket {
         ~storage() {}
 
         void destroy(enum state s) const noexcept {
-            if (s == state::LISTENING) {
+            if (s == state::listening) {
                 lstnr.~unique_ptr<listener>();
             }
         }
 
         void construct_from(enum state s, storage &&other) noexcept {
             switch (s) {
-            case state::CREATED:
+            case state::created:
                 bound_fd = constants::UNINITIALISED_FD;
                 break;
-            case state::BOUND:
+            case state::bound:
                 bound_fd = other.bound_fd;
                 break;
-            case state::LISTENING:
+            case state::listening:
                 new (&lstnr) std::unique_ptr<listener>(std::move(other.lstnr));
                 break;
-            case state::CONNECTED:
+            case state::connected:
                 new (&conn) connection_tuple(other.conn);
                 break;
             }
         }
     } data;
 
-    socket() : state(state::CREATED), data() {}
+    socket() : state(state::created), data() {}
     ~socket() {
         data.destroy(state);
     }
@@ -55,7 +55,7 @@ struct socket {
 
     socket(socket &&other) noexcept : state(other.state) {
         data.construct_from(state, std::move(other.data));
-        other.state = state::CREATED;
+        other.state = state::created;
     }
 
     socket &operator=(socket &&other) noexcept {
@@ -63,7 +63,7 @@ struct socket {
             data.destroy(state);
             state = other.state;
             data.construct_from(state, std::move(other.data));
-            other.state = state::CREATED;
+            other.state = state::created;
         }
         return *this;
     }

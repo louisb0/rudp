@@ -18,11 +18,10 @@ public:
     event_loop &operator=(event_loop &&) = delete;
 
     struct result {
-        // TODO: Make enum values lower-case.
         enum class error {
-            NONE,
-            EPOLL_CREATION,
-            THREAD_CREATION,
+            none,
+            epoll_creation,
+            thread_creation,
         };
 
         error err;
