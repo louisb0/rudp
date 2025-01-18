@@ -60,7 +60,7 @@ public:
 
     [[nodiscard]] bool on_syn(packet_header pkt) noexcept;
 
-    [[nodiscard]] bool assert_state(const char *caller) const noexcept;
+    void assert_state(const char *caller) const noexcept;
 
 private:
     linuxfd_t m_fd;

@@ -20,7 +20,7 @@ public:
 
     [[nodiscard]] linuxfd_t fd() const noexcept;
 
-    [[nodiscard]] bool assert_initialised_handler(const char *caller) const noexcept;
+    void assert_initialised_handler(const char *caller) const noexcept;
 
 protected:
     linuxfd_t m_fd;

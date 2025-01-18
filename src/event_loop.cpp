@@ -126,14 +126,14 @@ bool event_loop::add_handler(event_handler *handler) noexcept {
     handler->m_initialised = true;
     handler->m_event_loop = event_loop;
 
-    RUDP_ASSERT(handler->assert_initialised_handler(__PRETTY_FUNCTION__));
+    handler->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     return true;
 }
 
 bool event_loop::remove_handler(event_handler *handler) noexcept {
     RUDP_ASSERT(handler, "A handler should never be null.");
-    RUDP_ASSERT(handler->assert_initialised_handler(__PRETTY_FUNCTION__));
+    handler->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     auto event_loop = handler->m_event_loop;
 

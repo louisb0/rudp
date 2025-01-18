@@ -15,7 +15,7 @@
 namespace rudp::internal {
 
 void listener::handle_event() noexcept {
-    RUDP_ASSERT(assert_initialised_handler(__PRETTY_FUNCTION__));
+    assert_initialised_handler(__PRETTY_FUNCTION__);
     RUDP_ASSERT(m_event_loop->assert_correct_thread(__PRETTY_FUNCTION__));
 
     // Receive pending data.
@@ -81,7 +81,7 @@ void listener::handle_event() noexcept {
         close(fd);
         return;
     }
-    RUDP_ASSERT(conn->assert_initialised_handler(__PRETTY_FUNCTION__));
+    conn->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
     if (!inserted) {
@@ -95,11 +95,11 @@ void listener::handle_event() noexcept {
         close(fd);
         return;
     }
-    RUDP_ASSERT(conn->assert_state(__PRETTY_FUNCTION__));
+    conn->assert_state(__PRETTY_FUNCTION__);
 }
 
 rudpfd_t listener::wait_and_accept() noexcept {
-    RUDP_ASSERT(assert_initialised_handler(__PRETTY_FUNCTION__));
+    assert_initialised_handler(__PRETTY_FUNCTION__);
 
     std::unique_lock<std::mutex> lock(m_mtx);
     m_cv.wait(lock, [this]() { return !m_ready.empty(); });
