@@ -26,6 +26,8 @@ using f64 = double;
 
 using b8 = bool;
 
+// TODO: We should probably just use RAII for the linuxfd. This doesn't change this type, I just
+// am not sure where else to put this TODO.
 using linuxfd_t = s32;
 using rudpfd_t = s32;
 

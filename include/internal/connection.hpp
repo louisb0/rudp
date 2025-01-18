@@ -10,6 +10,7 @@
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
 #include "internal/event_handler.hpp"
+#include "internal/packet.hpp"
 
 namespace rudp::internal {
 
@@ -48,13 +49,34 @@ struct connection_tuple_hash {
 
 class connection : public event_handler {
 public:
-    connection(linuxfd_t fd, connection_tuple tuple) noexcept : event_handler(fd), m_tuple(tuple) {}
+    connection(linuxfd_t fd, connection_tuple tuple) noexcept
+        : event_handler(fd),
+          m_tuple(tuple),
+          m_state(state::closed),
+          m_prev_state(state::closed),
+          m_seqnum(0) {}  // TODO: Randomise. We will need a RNG for traces anyway.
 
     void handle_event() noexcept;
+
+    [[nodiscard]] bool on_syn(packet_header pkt) noexcept;
+
+    [[nodiscard]] bool assert_state(const char *caller) const noexcept;
 
 private:
     linuxfd_t m_fd;
     const connection_tuple m_tuple;
+
+    enum class state {
+        closed,
+        syn_rcvd,
+    };
+    enum state m_state;
+    enum state m_prev_state;
+
+    u32 m_seqnum;
+
+    // TODO: This will need to change to packet, eventually.
+    [[nodiscard]] bool send_packet(packet_header pkt) noexcept;
 };
 
 extern std::unordered_map<connection_tuple, std::unique_ptr<connection>, connection_tuple_hash>

@@ -167,6 +167,7 @@ bool event_loop::assert_initialised_state(const char *caller) const noexcept {
     return true;
 }
 
+// TODO: We should have assert_loop_thread() and assert_user_thread() for documentation purposes.
 bool event_loop::assert_correct_thread(const char *caller) const noexcept {
     RUDP_ASSERT(std::this_thread::get_id() == m_thread.get_id(),
                 "[%s] The core event loop must run on a dedicated thread.", caller);
