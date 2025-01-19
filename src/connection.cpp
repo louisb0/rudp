@@ -6,15 +6,15 @@
 
 namespace rudp::internal {
 
-void connection::handle_event() noexcept {
+void connection::handle_events() noexcept {
     assert_initialised_handler(__PRETTY_FUNCTION__);
-    RUDP_ASSERT(m_event_loop->assert_correct_thread(__PRETTY_FUNCTION__));
+    m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
 }
 
 bool connection::on_syn(packet_header pkt) noexcept {
     // NOTE: We assert for this handler and not the others as this is public facing.
     assert_initialised_handler(__PRETTY_FUNCTION__);
-    RUDP_ASSERT(m_event_loop->assert_correct_thread(__PRETTY_FUNCTION__));
+    m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
 
     RUDP_ASSERT(m_prev_state == state::closed, "A connection must be closed to process a raw SYN.");
     RUDP_ASSERT(m_state == state::closed, "A connection must be closed to process a raw SYN.");
@@ -34,7 +34,7 @@ bool connection::on_syn(packet_header pkt) noexcept {
     return true;
 }
 
-// TODO: A state transition table is arguably cleaner but a pain to maintain. It may be a better
+// NOTE: A state transition table is arguably cleaner but a pain to maintain. It may be a better
 // choice as complexity grows.
 void connection::assert_state(const char *caller) const noexcept {
     if (m_prev_state == state::closed) {

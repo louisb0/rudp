@@ -20,7 +20,7 @@ class listener : public event_handler {
 public:
     listener(linuxfd_t fd, u16 backlog) noexcept : event_handler(fd), m_backlog(backlog) {}
 
-    void handle_event() noexcept;
+    void handle_events() noexcept;
 
     [[nodiscard]] rudpfd_t wait_and_accept() noexcept;
 

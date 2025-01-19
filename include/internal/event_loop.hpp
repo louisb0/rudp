@@ -35,9 +35,9 @@ public:
 
     void loop() noexcept;
 
-    [[nodiscard]] linuxfd_t epollfd() const noexcept;
-    [[nodiscard]] bool assert_initialised_state(const char *caller) const noexcept;
-    [[nodiscard]] bool assert_correct_thread(const char *caller) const noexcept;
+    void assert_initialised_state(const char *caller) const noexcept;
+    void assert_event_thread(const char *caller) const noexcept;
+    void assert_user_thread(const char *caller) const noexcept;
 
 private:
     linuxfd_t m_epollfd;

@@ -24,8 +24,8 @@ RUDP_STATIC_ASSERT(max_events > 0,
                    "max_events must be non-negative or else epoll_wait() will error.");
 
 void event_loop::loop() noexcept {
-    RUDP_ASSERT(assert_correct_thread(__PRETTY_FUNCTION__));
-    RUDP_ASSERT(assert_initialised_state(__PRETTY_FUNCTION__));
+    assert_initialised_state(__PRETTY_FUNCTION__);
+    assert_event_thread(__PRETTY_FUNCTION__);
 
     m_thread_started.set_value();
     epoll_event events[max_events]{};
@@ -38,7 +38,7 @@ void event_loop::loop() noexcept {
             continue;
         }
 
-        RUDP_ASSERT(assert_initialised_state(__PRETTY_FUNCTION__));
+        assert_initialised_state(__PRETTY_FUNCTION__);
 
         // TODO: Implement batching by generating IDs as a handler lookup which we can sort.
         for (int i = 0; i < nfds; i++) {
@@ -47,7 +47,7 @@ void event_loop::loop() noexcept {
             auto it = m_handlers.find(fd);
             RUDP_ASSERT(it != m_handlers.end(),
                         "A handler must be registered for all epoll-registered FDs.");
-            it->second->handle_event();
+            it->second->handle_events();
         }
     }
 };
@@ -94,6 +94,7 @@ event_loop::result event_loop::instance() noexcept {
 
 bool event_loop::add_handler(event_handler *handler) noexcept {
     RUDP_ASSERT(handler, "A handler should never be null.");
+    RUDP_ASSERT(!handler->m_initialised, "A handler must not be initialised twice.");
 
     // Get event loop and assert state.
     auto [err, event_loop] = instance();
@@ -105,28 +106,24 @@ bool event_loop::add_handler(event_handler *handler) noexcept {
 
         return false;
     }
-
-    RUDP_ASSERT(event_loop->assert_initialised_state(__PRETTY_FUNCTION__));
-    RUDP_ASSERT(!handler->m_initialised, "A handler must not be initialised twice.");
+    event_loop->assert_initialised_state(__PRETTY_FUNCTION__);
 
     // Register the handler's FD to epoll.
     struct epoll_event ev = {
         .events = EPOLLIN,
-        .data = {.fd = handler->fd()},
+        .data = {.fd = handler->m_fd},
     };
 
-    if (epoll_ctl(event_loop->m_epollfd, EPOLL_CTL_ADD, handler->fd(), &ev) < 0) {
+    if (epoll_ctl(event_loop->m_epollfd, EPOLL_CTL_ADD, handler->m_fd, &ev) < 0) {
         // NOTE: errno would be set as ENOMEM or ENOSPC by epoll_ctl.
         return false;
     }
 
     // Register the handler and update state.
-    event_loop->m_handlers[handler->fd()] = handler;
+    event_loop->m_handlers[handler->m_fd] = handler;
 
     handler->m_initialised = true;
     handler->m_event_loop = event_loop;
-
-    handler->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     return true;
 }
@@ -136,13 +133,12 @@ bool event_loop::remove_handler(event_handler *handler) noexcept {
     handler->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     auto event_loop = handler->m_event_loop;
-
-    if (epoll_ctl(event_loop->m_epollfd, EPOLL_CTL_DEL, handler->fd(), nullptr) < 0) {
+    if (epoll_ctl(event_loop->m_epollfd, EPOLL_CTL_DEL, handler->m_fd, nullptr) < 0) {
         // NOTE: errno would be set as ENOMEM or ENOSPC by epoll_ctl.
         return false;
     }
 
-    event_loop->m_handlers.erase(handler->fd());
+    event_loop->m_handlers.erase(handler->m_fd);
 
     handler->m_initialised = false;
     handler->m_event_loop = nullptr;
@@ -150,29 +146,24 @@ bool event_loop::remove_handler(event_handler *handler) noexcept {
     return true;
 }
 
-linuxfd_t event_loop::epollfd() const noexcept {
-    RUDP_ASSERT(assert_initialised_state(__PRETTY_FUNCTION__));
-
-    return m_epollfd;
-}
-
-bool event_loop::assert_initialised_state(const char *caller) const noexcept {
+void event_loop::assert_initialised_state(const char *caller) const noexcept {
     RUDP_ASSERT(m_epollfd != constants::UNINITIALISED_FD,
                 "[%s] A running event loop must have an initialised epollfd.", caller);
     RUDP_ASSERT(is_valid_sockfd(m_epollfd), "[%s] A running event loop must have a valid epollfd.",
                 caller);
     RUDP_ASSERT(m_thread.joinable(),
                 "[%s] A running event loop must have a respective running thread.", caller);
-
-    return true;
 }
 
-// TODO: We should have assert_loop_thread() and assert_user_thread() for documentation purposes.
-bool event_loop::assert_correct_thread(const char *caller) const noexcept {
+// NOTE: These asserts assume the thread is already initialised.
+void event_loop::assert_event_thread(const char *caller) const noexcept {
     RUDP_ASSERT(std::this_thread::get_id() == m_thread.get_id(),
-                "[%s] The core event loop must run on a dedicated thread.", caller);
+                "[%s] The caller should run only on the event thread.", caller);
+}
 
-    return true;
+void event_loop::assert_user_thread(const char *caller) const noexcept {
+    RUDP_ASSERT(std::this_thread::get_id() != m_thread.get_id(),
+                "[%s] The caller should run only on the user thread.", caller);
 }
 
 }  // namespace rudp::internal

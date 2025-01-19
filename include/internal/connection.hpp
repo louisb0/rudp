@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <memory>
+#include <random>
 #include <unordered_map>
 
 #include "internal/assert.hpp"
@@ -13,6 +14,16 @@
 #include "internal/packet.hpp"
 
 namespace rudp::internal {
+namespace {
+    // NOTE: Predictable after 624 generated numbers but this is the best PRNG supported by C++.
+    u32 random_u32() {
+        static std::random_device rd;
+        static std::seed_seq ss{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
+        static std::mt19937 gen(ss);
+        static std::uniform_int_distribution<uint32_t> dis(1, std::numeric_limits<uint32_t>::max());
+        return dis(gen);
+    }
+}  // namespace
 
 struct connection_tuple {
     const in_addr_t src_ip;
@@ -54,9 +65,9 @@ public:
           m_tuple(tuple),
           m_state(state::closed),
           m_prev_state(state::closed),
-          m_seqnum(0) {}  // TODO: Randomise. We will need a RNG for traces anyway.
+          m_seqnum(random_u32()) {}
 
-    void handle_event() noexcept;
+    void handle_events() noexcept;
 
     [[nodiscard]] bool on_syn(packet_header pkt) noexcept;
 
@@ -75,7 +86,6 @@ private:
 
     u32 m_seqnum;
 
-    // TODO: This will need to change to packet, eventually.
     [[nodiscard]] bool send_packet(packet_header pkt) noexcept;
 };
 

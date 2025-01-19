@@ -128,9 +128,6 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     rudpfd_t fd = listener->wait_and_accept();
-    if (fd < 0) {
-        return -1;
-    }
 
     // Validate state of the accepted socket.
     RUDP_ASSERT(internal::g_sockets.contains(fd),
