@@ -39,3 +39,9 @@ target_include_directories(${PROJECT_NAME}
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
+
+add_executable(rudp_server examples/server-client/server.cpp)
+target_link_libraries(rudp_server PRIVATE ${PROJECT_NAME})
+
+add_executable(rudp_client examples/server-client/client.cpp)
+target_link_libraries(rudp_client PRIVATE ${PROJECT_NAME})
