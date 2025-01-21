@@ -176,7 +176,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     // Ensure socket is bound, either existing or implicitly.
-    if (sock->state != internal::socket::state::created) {
+    if (sock->state == internal::socket::state::created) {
         struct sockaddr_in bind_addr = {};
         bind_addr.sin_family = AF_INET;
         bind_addr.sin_addr.s_addr = INADDR_ANY;
