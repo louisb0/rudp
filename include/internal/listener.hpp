@@ -2,9 +2,7 @@
 
 #include <sys/socket.h>
 
-#include <condition_variable>
 #include <limits>
-#include <mutex>
 #include <queue>
 
 #include "internal/assert.hpp"
@@ -27,8 +25,6 @@ public:
 private:
     const u16 m_backlog;
 
-    std::mutex m_mtx;
-    std::condition_variable m_cv;
     std::queue<rudpfd_t> m_ready;
 };
 

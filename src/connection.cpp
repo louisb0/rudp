@@ -4,7 +4,6 @@
 
 #include <cstdio>
 #include <cstring>
-#include <iostream>
 
 #include "internal/assert.hpp"
 #include "internal/event_loop.hpp"
@@ -20,13 +19,36 @@ void connection::handle_events() noexcept {
     m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
 }
 
-bool connection::on_syn(packet_header pkt) noexcept {
-    // NOTE: We assert for this handler and not the others as this is public facing.
+bool connection::syn() noexcept {
+    assert_initialised_handler(__PRETTY_FUNCTION__);
+    m_event_loop->assert_user_thread(__PRETTY_FUNCTION__);
+
+    RUDP_ASSERT(m_prev_state == state::closed, "A connection must be closed to send a plain SYN.");
+    RUDP_ASSERT(m_state == state::closed, "A connection must be closed to send a plain SYN.");
+
+    packet_header syn;
+    syn.flags = flag::SYN;
+    syn.seqnum = m_seqnum++;
+    syn.acknum = 0;
+
+    // TODO: Reliably send.
+    if (sendto(m_fd, &syn, sizeof(syn), 0, m_tuple.dst(), m_tuple.addr_size()) <= 0) {
+        return false;
+    }
+
+    m_prev_state = state::closed;
+    m_state = state::syn_sent;
+
+    return true;
+}
+
+bool connection::synack(packet_header pkt) noexcept {
     assert_initialised_handler(__PRETTY_FUNCTION__);
     m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
 
-    RUDP_ASSERT(m_prev_state == state::closed, "A connection must be closed to process a raw SYN.");
-    RUDP_ASSERT(m_state == state::closed, "A connection must be closed to process a raw SYN.");
+    RUDP_ASSERT(m_prev_state == state::closed,
+                "A connection must be closed to process a plain SYN.");
+    RUDP_ASSERT(m_state == state::closed, "A connection must be closed to process a plain SYN.");
 
     packet_header synack;
     synack.flags = flag::SYN | flag::ACK;
@@ -42,6 +64,15 @@ bool connection::on_syn(packet_header pkt) noexcept {
     m_state = state::syn_rcvd;
 
     return true;
+}
+
+void connection::wait_for_established() noexcept {
+    assert_initialised_handler(__PRETTY_FUNCTION__);
+    m_event_loop->assert_user_thread(__PRETTY_FUNCTION__);
+
+    // TODO: This doesn't account for error states, e.g. a reset or timeout.
+    std::unique_lock<std::mutex> lock(m_mtx);
+    m_cv.wait(lock, [this]() { return m_state == state::established; });
 }
 
 // NOTE: A state transition table is arguably cleaner but a pain to maintain. It may be a better

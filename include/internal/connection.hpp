@@ -95,7 +95,10 @@ public:
 
     void handle_events() noexcept;
 
-    [[nodiscard]] bool on_syn(packet_header pkt) noexcept;
+    [[nodiscard]] bool syn() noexcept;
+    [[nodiscard]] bool synack(packet_header pkt) noexcept;
+
+    void wait_for_established() noexcept;
 
     void assert_state(const char *caller) const noexcept;
 
@@ -104,7 +107,9 @@ private:
 
     enum class state {
         closed,
+        syn_sent,
         syn_rcvd,
+        established,
     };
     enum state m_state;
     enum state m_prev_state;

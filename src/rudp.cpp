@@ -211,6 +211,11 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         .dst_ip = (reinterpret_cast<struct sockaddr_in *>(addr))->sin_addr.s_addr,
     };
 
+    if (internal::g_connections.contains(tuple)) {
+        errno = EADDRINUSE;
+        return -1;
+    }
+
     auto conn = std::make_unique<internal::connection>(fd, tuple);
     if (!conn) {
         errno = ENOMEM;
@@ -223,23 +228,17 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
     conn->assert_initialised_handler(__PRETTY_FUNCTION__);
 
-    // Register the connection and update socket state.
-    auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
-    if (!inserted) {
-        internal::event_loop::remove_handler(conn.get());
-        errno = EADDRINUSE;
+    // Send the SYN and await connection establishment.
+    if (!conn->syn()) {
+        // TODO: syn() sets errno. (?)
         return -1;
     }
 
-    // TODO: Use the connections reliable send and block until we reach the connected state.
-    internal::packet_header pkt = {
-        .seqnum = 0,
-        .acknum = 0,
-        .flags = internal::SYN,
-    };
-    if (sendto(fd, &pkt, sizeof(pkt), 0, addr, addrlen) <= 0) {
-        assert(false);
-    }
+    conn->wait_for_established();
+
+    // Insert the conncetion and transition socket state.
+    auto [conn_it, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
+    RUDP_ASSERT(inserted, "connect() will not insert an existing connection.");
 
     sock->state = internal::socket::state::connected;
     new (&sock->data.conn) internal::connection_tuple(tuple);

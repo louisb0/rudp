@@ -80,20 +80,21 @@ void listener::handle_events() noexcept {
             continue;
         }
 
+        // Register the handler and respond.
         if (!internal::event_loop::add_handler(conn.get())) {
             close(fd);
             continue;
         }
         conn->assert_initialised_handler(__PRETTY_FUNCTION__);
 
-        if (!conn->on_syn(pkt)) {
+        if (!conn->synack(pkt)) {
             internal::event_loop::remove_handler(conn.get());
             close(fd);
             continue;
         }
         conn->assert_state(__PRETTY_FUNCTION__);
 
-        auto [it, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
+        auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
         RUDP_ASSERT(inserted, "The listener will not insert an existing connection.");
     }
 }

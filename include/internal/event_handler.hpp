@@ -1,5 +1,8 @@
 #pragma once
 
+#include <condition_variable>
+#include <mutex>
+
 #include "internal/common.hpp"
 
 namespace rudp::internal {
@@ -21,6 +24,9 @@ protected:
     linuxfd_t m_fd;
     event_loop *m_event_loop;
     bool m_initialised;
+
+    std::mutex m_mtx;
+    std::condition_variable m_cv;
 };
 
 }  // namespace rudp::internal
