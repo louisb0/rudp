@@ -95,7 +95,7 @@ int listen(int sockfd, int backlog) noexcept {
 
     // Update the socket state.
     sock->state = internal::socket::state::listening;
-    sock->data.lstnr = std::move(listener);
+    new (&sock->data.lstnr) std::unique_ptr<internal::listener>(std::move(listener));
 
     return 0;
 }
