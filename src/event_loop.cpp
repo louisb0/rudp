@@ -24,13 +24,15 @@ RUDP_STATIC_ASSERT(max_events > 0,
                    "max_events must be non-negative or else epoll_wait() will error.");
 
 void event_loop::loop() noexcept {
+    m_running = true;
+
     assert_initialised_state(__PRETTY_FUNCTION__);
     assert_event_thread(__PRETTY_FUNCTION__);
 
     m_thread_started.set_value();
     epoll_event events[max_events]{};
 
-    while (true) {
+    while (m_running) {
         int nfds = epoll_wait(m_epollfd, events, max_events, 50);
         if (nfds < 0) {
             RUDP_ASSERT(errno == EINTR, "EINTR is the only possible error, but we received %s.",
@@ -149,10 +151,10 @@ bool event_loop::remove_handler(event_handler *handler) noexcept {
 void event_loop::assert_initialised_state(const char *caller) const noexcept {
     RUDP_ASSERT(m_epollfd != constants::UNINITIALISED_FD,
                 "[%s] A running event loop must have an initialised epollfd.", caller);
-    RUDP_ASSERT(is_valid_sockfd(m_epollfd), "[%s] A running event loop must have a valid epollfd.",
+    RUDP_ASSERT(is_valid_epollfd(m_epollfd),
+                "[%s] %d A running event loop must have a valid epollfd.", caller, errno);
+    RUDP_ASSERT(m_running, "[%s] A running event loop must have a respective running thread.",
                 caller);
-    RUDP_ASSERT(m_thread.joinable(),
-                "[%s] A running event loop must have a respective running thread.", caller);
 }
 
 // NOTE: These asserts assume the thread is already initialised.

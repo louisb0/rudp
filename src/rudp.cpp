@@ -2,6 +2,7 @@
 #include <sys/types.h>
 
 #include <cerrno>
+#include <cstdio>
 #include <cstring>
 #include <memory>
 
@@ -9,6 +10,7 @@
 #include "internal/connection.hpp"
 #include "internal/event_loop.hpp"
 #include "internal/listener.hpp"
+#include "internal/packet.hpp"
 #include "internal/socket.hpp"
 
 namespace rudp {
@@ -58,6 +60,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
 }
 
 int listen(int sockfd, int backlog) noexcept {
+    // TODO: Accept -1 as an indicator of no backlog.
     if (backlog < 0 || backlog > SOMAXCONN) {
         errno = EINVAL;
         return -1;
@@ -226,6 +229,16 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         internal::event_loop::remove_handler(conn.get());
         errno = EADDRINUSE;
         return -1;
+    }
+
+    // TODO: Use the connections reliable send and block until we reach the connected state.
+    internal::packet_header pkt = {
+        .seqnum = 0,
+        .acknum = 0,
+        .flags = internal::SYN,
+    };
+    if (sendto(fd, &pkt, sizeof(pkt), 0, addr, addrlen) <= 0) {
+        assert(false);
     }
 
     sock->state = internal::socket::state::connected;

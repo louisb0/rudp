@@ -1,10 +1,19 @@
 #include "internal/connection.hpp"
 
+#include <sys/socket.h>
+
+#include <cstdio>
+#include <cstring>
+#include <iostream>
+
 #include "internal/assert.hpp"
 #include "internal/event_loop.hpp"
 #include "internal/packet.hpp"
 
 namespace rudp::internal {
+
+std::unordered_map<connection_tuple, std::unique_ptr<connection>, connection_tuple_hash>
+    g_connections;
 
 void connection::handle_events() noexcept {
     assert_initialised_handler(__PRETTY_FUNCTION__);
@@ -24,7 +33,8 @@ bool connection::on_syn(packet_header pkt) noexcept {
     synack.seqnum = m_seqnum++;
     synack.acknum = pkt.seqnum + 1;
 
-    if (!send_packet(synack)) {
+    // TODO: Reliably send.
+    if (sendto(m_fd, &synack, sizeof(synack), 0, m_tuple.dst(), m_tuple.addr_size()) <= 0) {
         return false;
     }
 

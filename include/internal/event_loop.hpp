@@ -11,7 +11,7 @@ namespace rudp::internal {
 
 class event_loop {
 public:
-    event_loop() noexcept : m_epollfd(constants::UNINITIALISED_FD) {}
+    event_loop() noexcept : m_epollfd(constants::UNINITIALISED_FD), m_running(false) {}
 
     event_loop(const event_loop &) = delete;
     event_loop &operator=(const event_loop &) = delete;
@@ -41,6 +41,7 @@ public:
 
 private:
     linuxfd_t m_epollfd;
+    bool m_running;
     std::thread m_thread;
     std::promise<void> m_thread_started;
 

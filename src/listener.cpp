@@ -4,9 +4,11 @@
 #include <sys/socket.h>
 
 #include <condition_variable>
+#include <cstring>
 #include <mutex>
 #include <queue>
 
+#include "internal/assert.hpp"
 #include "internal/common.hpp"
 #include "internal/connection.hpp"
 #include "internal/event_loop.hpp"
@@ -21,20 +23,20 @@ void listener::handle_events() noexcept {
     while (true) {
         // Receive pending data.
         packet_header pkt;
-        sockaddr_storage addr;
-        socklen_t addr_len = sizeof(addr);
+        sockaddr_in connecting_addr{};
+        socklen_t connecting_addr_len = sizeof(connecting_addr);
 
-        ssize_t bytes = recvfrom(m_fd, &pkt, sizeof(pkt), 0,
-                                 reinterpret_cast<struct sockaddr *>(&addr), &addr_len);
+        ssize_t bytes =
+            recvfrom(m_fd, &pkt, sizeof(pkt), 0,
+                     reinterpret_cast<struct sockaddr *>(&connecting_addr), &connecting_addr_len);
         if (bytes < 0 && errno == EWOULDBLOCK) {
             continue;
         }
-
         if (bytes == 0) {
             continue;
         }
 
-        if (addr.ss_family != AF_INET) {
+        if (connecting_addr.sin_family != AF_INET) {
             continue;
         }
 
@@ -42,60 +44,57 @@ void listener::handle_events() noexcept {
             continue;
         }
 
-        // Create a new FD, bound to the same address, to be used for the established connection.
-        sockaddr_storage local_addr;
-        socklen_t local_addr_len = sizeof(local_addr);
-        if (getsockname(m_fd, reinterpret_cast<struct sockaddr *>(&local_addr), &local_addr_len) <
-            0) {
-            continue;
-        }
-        RUDP_ASSERT(local_addr.ss_family == AF_INET, "All listeners should be created using IPv4.");
-
-        int fd = socket(local_addr.ss_family, SOCK_DGRAM, 0);
+        // Create and bind a new FD for the connection to be spawned.
+        int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
         if (fd < 0) {
             continue;
         }
 
-        if (bind(fd, reinterpret_cast<struct sockaddr *>(&local_addr), local_addr_len) < 0) {
+        struct sockaddr_in new_addr;
+        memset(&new_addr, 0, sizeof(new_addr));
+        new_addr.sin_family = AF_INET;
+        new_addr.sin_addr.s_addr = INADDR_ANY;
+        new_addr.sin_port = 0;
+
+        if (bind(fd, reinterpret_cast<struct sockaddr *>(&new_addr), sizeof(new_addr)) < 0) {
             close(fd);
             continue;
         }
 
         // Create and initialise the connection.
-        const struct sockaddr_in *local_in =
-            reinterpret_cast<const struct sockaddr_in *>(&local_addr);
-        const struct sockaddr_in *peer_in = reinterpret_cast<const struct sockaddr_in *>(&addr);
-
         internal::connection_tuple tuple = {
-            .src_ip = local_in->sin_addr.s_addr,
-            .src_port = local_in->sin_port,
-            .dst_port = peer_in->sin_port,
-            .dst_ip = peer_in->sin_addr.s_addr,
+            .src_ip = new_addr.sin_addr.s_addr,
+            .src_port = new_addr.sin_port,
+            .dst_port = connecting_addr.sin_port,
+            .dst_ip = connecting_addr.sin_addr.s_addr,
         };
 
-        // NOTE: This logic is identical to that of rudp.cpp in connect() with the added
-        // requirement of closing the FD. I don't think it requires abstraction yet as the
-        // overhead of conditional RAII doesn't outweigh a singular duplicate.
+        if (internal::g_connections.contains(tuple)) {
+            close(fd);
+            continue;
+        }
+
         auto conn = std::make_unique<internal::connection>(fd, tuple);
-        if (!conn || !internal::event_loop::add_handler(conn.get())) {
+        if (!conn) {
+            close(fd);
+            continue;
+        }
+
+        if (!internal::event_loop::add_handler(conn.get())) {
             close(fd);
             continue;
         }
         conn->assert_initialised_handler(__PRETTY_FUNCTION__);
 
-        auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
-        if (!inserted) {
-            close(fd);
-            internal::event_loop::remove_handler(conn.get());
-            continue;
-        }
-
-        // Handle the received SYN.
         if (!conn->on_syn(pkt)) {
+            internal::event_loop::remove_handler(conn.get());
             close(fd);
             continue;
         }
         conn->assert_state(__PRETTY_FUNCTION__);
+
+        auto [it, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
+        RUDP_ASSERT(inserted, "The listener will not insert an existing connection.");
     }
 }
 

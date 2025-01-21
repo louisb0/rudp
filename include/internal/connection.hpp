@@ -4,6 +4,7 @@
 #include <netinet/in.h>
 
 #include <cstddef>
+#include <cstring>
 #include <memory>
 #include <random>
 #include <unordered_map>
@@ -25,11 +26,36 @@ namespace {
     }
 }  // namespace
 
+// NOTE: I thought this was necessary so that if we can detect identical source/destination
+// connections and prevent them from being reopened while in TIME_WAIT. However, our listeners spawn
+// a handler on a new port, making this unlikely.
 struct connection_tuple {
     const in_addr_t src_ip;
     const in_port_t src_port;
     const in_port_t dst_port;
     const in_addr_t dst_ip;
+
+    [[nodiscard]] sockaddr *dst() const {
+        static sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = dst_port;
+        addr.sin_addr.s_addr = dst_ip;
+        return reinterpret_cast<sockaddr *>(&addr);
+    }
+
+    [[nodiscard]] sockaddr *src() const {
+        static sockaddr_in addr;
+        memset(&addr, 0, sizeof(addr));
+        addr.sin_family = AF_INET;
+        addr.sin_port = src_port;
+        addr.sin_addr.s_addr = src_ip;
+        return reinterpret_cast<sockaddr *>(&addr);
+    }
+
+    static constexpr socklen_t addr_size() {
+        return sizeof(sockaddr_in);
+    }
 
     [[nodiscard]] bool operator==(const connection_tuple &other) const noexcept {
         return src_ip == other.src_ip && src_port == other.src_port && dst_ip == other.dst_ip &&
@@ -74,7 +100,6 @@ public:
     void assert_state(const char *caller) const noexcept;
 
 private:
-    linuxfd_t m_fd;
     const connection_tuple m_tuple;
 
     enum class state {
