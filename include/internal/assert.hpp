@@ -41,7 +41,8 @@ inline bool is_valid_sockfd(linuxfd_t fd) {
 }
 
 inline bool is_valid_epollfd(linuxfd_t fd) {
-    return epoll_wait(fd, NULL, 0, 0) != -1 || errno == EINTR;
+    // NOTE: A bad epollfd returns EINVAL, whereas a bad fd (-1) returns EBADF.
+    return epoll_ctl(fd, EPOLL_CTL_DEL, -1, NULL) == -1 && errno == EBADF;
 }
 
 }  // namespace rudp::internal
