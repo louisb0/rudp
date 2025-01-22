@@ -1,3 +1,4 @@
+#include <sys/fcntl.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 
@@ -10,7 +11,6 @@
 #include "internal/connection.hpp"
 #include "internal/event_loop.hpp"
 #include "internal/listener.hpp"
-#include "internal/packet.hpp"
 #include "internal/socket.hpp"
 
 namespace rudp {
@@ -41,11 +41,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     // Bind the underlying FD.
-    linuxfd_t fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-    if (fd < 0) {
-        return -1;
-    }
-
+    linuxfd_t fd = internal::create_raw_socket();
     if (::bind(fd, addr, addrlen) < 0) {
         // NOTE: If close() failed, we would have a leak of a bound socket here.
         internal::preserve_errno([fd]() { ::close(fd); });

@@ -1,6 +1,7 @@
 #include "internal/listener.hpp"
 
 #include <sys/epoll.h>
+#include <sys/fcntl.h>
 #include <sys/socket.h>
 
 #include <condition_variable>
@@ -13,6 +14,7 @@
 #include "internal/connection.hpp"
 #include "internal/event_loop.hpp"
 #include "internal/packet.hpp"
+#include "internal/socket.hpp"
 
 namespace rudp::internal {
 
@@ -30,10 +32,10 @@ void listener::handle_events() noexcept {
             recvfrom(m_fd, &pkt, sizeof(pkt), 0,
                      reinterpret_cast<struct sockaddr *>(&connecting_addr), &connecting_addr_len);
         if (bytes < 0 && errno == EWOULDBLOCK) {
-            continue;
+            break;
         }
         if (bytes == 0) {
-            continue;
+            break;
         }
 
         if (connecting_addr.sin_family != AF_INET) {
@@ -45,10 +47,7 @@ void listener::handle_events() noexcept {
         }
 
         // Create and bind a new FD for the connection to be spawned.
-        int fd = ::socket(AF_INET, SOCK_DGRAM, 0);
-        if (fd < 0) {
-            continue;
-        }
+        linuxfd_t fd = internal::create_raw_socket();
 
         struct sockaddr_in new_addr;
         memset(&new_addr, 0, sizeof(new_addr));
@@ -79,6 +78,7 @@ void listener::handle_events() noexcept {
             close(fd);
             continue;
         }
+        conn->set_peer(connecting_addr);
 
         // Register the handler and respond.
         if (!internal::event_loop::add_handler(conn.get())) {

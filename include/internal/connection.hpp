@@ -32,8 +32,12 @@ namespace {
 struct connection_tuple {
     const in_addr_t src_ip;
     const in_port_t src_port;
-    const in_port_t dst_port;
-    const in_addr_t dst_ip;
+    in_port_t dst_port;
+    in_addr_t dst_ip;
+
+    [[nodiscard]] bool equals_dst(sockaddr_in *addr) const {
+        return addr->sin_port == dst_port && addr->sin_addr.s_addr == dst_ip;
+    }
 
     [[nodiscard]] sockaddr *dst() const {
         static sockaddr_in addr;
@@ -41,15 +45,6 @@ struct connection_tuple {
         addr.sin_family = AF_INET;
         addr.sin_port = dst_port;
         addr.sin_addr.s_addr = dst_ip;
-        return reinterpret_cast<sockaddr *>(&addr);
-    }
-
-    [[nodiscard]] sockaddr *src() const {
-        static sockaddr_in addr;
-        memset(&addr, 0, sizeof(addr));
-        addr.sin_family = AF_INET;
-        addr.sin_port = src_port;
-        addr.sin_addr.s_addr = src_ip;
         return reinterpret_cast<sockaddr *>(&addr);
     }
 
@@ -89,6 +84,7 @@ public:
     connection(linuxfd_t fd, connection_tuple tuple) noexcept
         : event_handler(fd),
           m_tuple(tuple),
+          m_peer_known(false),
           m_state(state::closed),
           m_prev_state(state::closed),
           m_seqnum(random_u32()) {}
@@ -99,11 +95,13 @@ public:
     [[nodiscard]] bool synack(packet_header pkt) noexcept;
 
     void wait_for_established() noexcept;
+    void set_peer(const sockaddr_in &addr);
 
     void assert_state(const char *caller) const noexcept;
 
 private:
-    const connection_tuple m_tuple;
+    connection_tuple m_tuple;
+    bool m_peer_known;
 
     enum class state {
         closed,

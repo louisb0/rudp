@@ -31,6 +31,7 @@
     _RUDP_GET_MACRO(__VA_ARGS__, RUDP_ASSERT_N, RUDP_ASSERT_N, RUDP_ASSERT_N, RUDP_ASSERT_N, \
                     RUDP_ASSERT_1)(__VA_ARGS__)
 #define RUDP_STATIC_ASSERT(condition, ...) static_assert(condition)
+#define RUDP_UNREACHABLE() RUDP_ASSERT(false, "This point is unreachable.")
 
 namespace rudp::internal {
 

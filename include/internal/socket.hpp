@@ -69,6 +69,8 @@ struct socket {
     }
 };
 
+linuxfd_t create_raw_socket();
+
 extern rudpfd_t next_fd;
 extern std::unordered_map<rudpfd_t, socket> g_sockets;
 
