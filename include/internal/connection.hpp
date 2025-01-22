@@ -6,7 +6,6 @@
 #include <cstddef>
 #include <cstring>
 #include <memory>
-#include <random>
 #include <unordered_map>
 
 #include "internal/assert.hpp"
@@ -15,16 +14,6 @@
 #include "internal/packet.hpp"
 
 namespace rudp::internal {
-namespace {
-    // NOTE: Predictable after 624 generated numbers but this is the best PRNG supported by C++.
-    u32 random_u32() {
-        static std::random_device rd;
-        static std::seed_seq ss{rd(), rd(), rd(), rd(), rd(), rd(), rd(), rd()};
-        static std::mt19937 gen(ss);
-        static std::uniform_int_distribution<uint32_t> dis(1, std::numeric_limits<uint32_t>::max());
-        return dis(gen);
-    }
-}  // namespace
 
 // NOTE: I thought this was necessary so that if we can detect identical source/destination
 // connections and prevent them from being reopened while in TIME_WAIT. However, our listeners spawn
@@ -87,7 +76,7 @@ public:
           m_peer_known(false),
           m_state(state::closed),
           m_prev_state(state::closed),
-          m_seqnum(random_u32()) {}
+          m_seqnum(0) {}  // TODO: Use random_u32(). This requires wrap-around logic.
 
     void handle_events() noexcept;
 

@@ -226,7 +226,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
 
     // Send the SYN and await connection establishment.
     if (!conn->syn()) {
-        // TODO: syn() sets errno. (?)
+        // NOTE: syn() sets errno.
         return -1;
     }
 
