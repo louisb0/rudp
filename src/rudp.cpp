@@ -23,29 +23,42 @@ int socket(void) noexcept {
 }
 
 int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
-    // TODO: Check addr is not nullptr.
+    // Address validation.
+    if (addr == nullptr) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (addrlen != sizeof(struct sockaddr_in)) {
+        errno = EINVAL;
+        return -1;
+    }
+
     if (addr->sa_family != AF_INET) {
         errno = EAFNOSUPPORT;
         return -1;
     }
 
-    // Socket lookup and state validation.
-    auto it = internal::g_sockets.find(sockfd);
-    if (it == internal::g_sockets.end()) {
+    // Socket validation.
+    auto sock_it = internal::g_sockets.find(sockfd);
+    if (sock_it == internal::g_sockets.end()) {
         errno = EBADF;
         return -1;
     }
 
-    internal::socket *sock = &it->second;
+    internal::socket *sock = &sock_it->second;
     if (sock->state != internal::socket::state::created) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
-    // Bind the underlying FD.
+    // Create and bind an underlying FD.
     linuxfd_t fd = internal::create_raw_socket();
+    if (fd < 0) {
+        return -1;
+    }
+
     if (::bind(fd, addr, addrlen) < 0) {
-        // NOTE: If close() failed, we would have a leak of a bound socket here.
         internal::preserve_errno([fd]() { ::close(fd); });
         return -1;
     }
