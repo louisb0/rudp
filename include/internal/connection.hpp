@@ -20,8 +20,8 @@ namespace rudp::internal {
 // a handler on a new port, making this unlikely.
 // TODO: This smells.
 struct connection_tuple {
-    const in_addr_t src_ip;
-    const in_port_t src_port;
+    in_addr_t src_ip;
+    in_port_t src_port;
     in_port_t dst_port;
     in_addr_t dst_ip;
 

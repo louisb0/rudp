@@ -16,9 +16,8 @@
 namespace rudp {
 
 int socket(void) noexcept {
-    rudpfd_t fd = internal::next_fd++;
-    // TODO: Use emplace properly.
-    internal::g_sockets.emplace(fd, internal::socket{});
+    rudpfd_t fd = internal::g_next_fd++;
+    internal::g_sockets.try_emplace(fd);
     return fd;
 }
 
@@ -46,8 +45,9 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
+    // TODO: Just use a reference.
     internal::socket *sock = &sock_it->second;
-    if (sock->state != internal::socket::state::created) {
+    if (!sock->created()) {
         errno = EOPNOTSUPP;
         return -1;
     }
@@ -63,10 +63,8 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
-    // Update the socket state.
-    sock->state = internal::socket::state::bound;
-    sock->data.bound_fd = fd;
-
+    // Transition state.
+    sock->data = fd;
     return 0;
 }
 
@@ -85,12 +83,12 @@ int listen(int sockfd, int backlog) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::bound) {
+    if (!sock->bound()) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
-    linuxfd_t fd = sock->data.bound_fd;
+    linuxfd_t fd = sock->fd();
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
                 "A socket in the BOUND state must hold a valid linuxfd_t.");
 
@@ -108,9 +106,7 @@ int listen(int sockfd, int backlog) noexcept {
     listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     // Update the socket state.
-    sock->state = internal::socket::state::listening;
-    new (&sock->data.lstnr) std::unique_ptr<internal::listener>(std::move(listener));
-
+    sock->data = std::move(listener);
     return 0;
 }
 
@@ -130,15 +126,14 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::listening) {
+    if (!sock->listening()) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
     // Validate state of the listener & forward blocking accept call.
-    auto &listener = sock->data.lstnr;
-    RUDP_ASSERT(listener != nullptr,
-                "A socket in the LISTENING state must hold a non-null listener.");
+    internal::listener *listener = sock->listener();
+    RUDP_ASSERT(listener != nullptr, "A listening socket's unique_ptr must be non-null.");
     listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     rudpfd_t fd = listener->wait_and_accept();
@@ -146,7 +141,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     // Validate state of the accepted socket.
     RUDP_ASSERT(internal::g_sockets.contains(fd),
                 "wait_and_accept() must return a valid rudpfd_t.");
-    RUDP_ASSERT(internal::g_sockets.at(fd).state == internal::socket::state::connected,
+    RUDP_ASSERT(internal::g_sockets.at(fd).connected(),
                 "Accepted socket must be in CONNECTED state.");
     auto &accepted_sock = internal::g_sockets.at(fd);
 
@@ -154,8 +149,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     if (addr != nullptr && addrlen != nullptr) {
         struct sockaddr_in peer_addr = {};
         peer_addr.sin_family = AF_INET;
-        peer_addr.sin_addr.s_addr = accepted_sock.data.conn.dst_ip;
-        peer_addr.sin_port = accepted_sock.data.conn.dst_port;
+        peer_addr.sin_addr.s_addr = accepted_sock.tuple().dst_ip;
+        peer_addr.sin_port = accepted_sock.tuple().dst_port;
 
         memcpy(addr, &peer_addr, std::min(static_cast<unsigned long>(*addrlen), sizeof(peer_addr)));
         *addrlen = sizeof(peer_addr);
@@ -185,14 +180,13 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     internal::socket *sock = &it->second;
-    if (sock->state != internal::socket::state::created &&
-        sock->state != internal::socket::state::bound) {
+    if (!sock->created() && !sock->bound()) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
     // Ensure socket is bound, either existing or implicitly.
-    if (sock->state == internal::socket::state::created) {
+    if (sock->created()) {
         struct sockaddr_in bind_addr = {};
         bind_addr.sin_family = AF_INET;
         bind_addr.sin_addr.s_addr = INADDR_ANY;
@@ -203,11 +197,10 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
             return -1;
         }
     }
-    RUDP_ASSERT(sock->state == internal::socket::state::bound,
-                "A socket must have an allocated port prior to becoming connected.");
+    RUDP_ASSERT(sock->bound(), "A socket must have an allocated port prior to becoming connected.");
 
     // Get local address information for internal::connection_tuple.
-    linuxfd_t fd = sock->data.bound_fd;
+    linuxfd_t fd = sock->fd();
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
                 "A socket in the BOUND state must hold a valid linuxfd_t.");
 
@@ -255,8 +248,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     auto [conn_it, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
     RUDP_ASSERT(inserted, "connect() will not insert an existing connection.");
 
-    sock->state = internal::socket::state::connected;
-    new (&sock->data.conn) internal::connection_tuple(tuple);
+    sock->data = tuple;
 
     return 0;
 }
