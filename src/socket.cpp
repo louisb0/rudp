@@ -9,6 +9,7 @@
 
 namespace rudp::internal {
 
+// TODO: Prefix with g_
 rudpfd_t next_fd = 0;
 std::unordered_map<rudpfd_t, socket> g_sockets;
 

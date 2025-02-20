@@ -42,7 +42,7 @@ void event_loop::loop() noexcept {
 
         assert_initialised_state(__PRETTY_FUNCTION__);
 
-        // TODO: Implement batching by generating IDs as a handler lookup which we can sort.
+        // TODO: Batch by handler type - i.e. all connections, then all listeners.
         for (int i = 0; i < nfds; i++) {
             linuxfd_t fd = events[i].data.fd;
 

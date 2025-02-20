@@ -18,12 +18,14 @@ namespace rudp::internal {
 // NOTE: I thought this was necessary so that if we can detect identical source/destination
 // connections and prevent them from being reopened while in TIME_WAIT. However, our listeners spawn
 // a handler on a new port, making this unlikely.
+// TODO: This smells.
 struct connection_tuple {
     const in_addr_t src_ip;
     const in_port_t src_port;
     in_port_t dst_port;
     in_addr_t dst_ip;
 
+    // TODO: Replace with is_peer() or similar.
     [[nodiscard]] bool equals_dst(sockaddr_in *addr) const {
         return addr->sin_port == dst_port && addr->sin_addr.s_addr == dst_ip;
     }
@@ -76,8 +78,9 @@ public:
           m_peer_known(false),
           m_state(state::closed),
           m_prev_state(state::closed),
-          m_seqnum(0) {}  // TODO: Use random_u32(). This requires wrap-around logic.
+          m_seqnum(0) {}
 
+    // TODO: Remove.
     void handle_events() noexcept;
 
     [[nodiscard]] bool syn() noexcept;
@@ -98,6 +101,7 @@ private:
         syn_rcvd,
         established,
     };
+    // TODO: This is a weird coupling which could be abstracted into state itself.
     enum state m_state;
     enum state m_prev_state;
 

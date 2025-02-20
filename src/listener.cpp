@@ -32,6 +32,7 @@ void listener::handle_events() noexcept {
             recvfrom(m_fd, &pkt, sizeof(pkt), 0,
                      reinterpret_cast<struct sockaddr *>(&connecting_addr), &connecting_addr_len);
         if (bytes < 0 && errno == EWOULDBLOCK) {
+            // TODO: What about other errno?
             break;
         }
         if (bytes == 0) {
@@ -47,9 +48,11 @@ void listener::handle_events() noexcept {
         }
 
         // Create and bind a new FD for the connection to be spawned.
+        // TODO: Consider RAII, e.g. internal::closing<linuxfd_t>
         linuxfd_t fd = internal::create_raw_socket();
 
         struct sockaddr_in new_addr;
+        // TODO: Don't use memset.
         memset(&new_addr, 0, sizeof(new_addr));
         new_addr.sin_family = AF_INET;
         new_addr.sin_addr.s_addr = INADDR_ANY;
@@ -96,6 +99,8 @@ void listener::handle_events() noexcept {
 
         auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
         RUDP_ASSERT(inserted, "The listener will not insert an existing connection.");
+
+        // TODO: Create a socket, place on the queue, notify.
     }
 }
 
@@ -103,6 +108,7 @@ rudpfd_t listener::wait_and_accept() noexcept {
     assert_initialised_handler(__PRETTY_FUNCTION__);
     m_event_loop->assert_user_thread(__PRETTY_FUNCTION__);
 
+    // Block until there is a ready socket.
     std::unique_lock<std::mutex> lock(m_mtx);
     m_cv.wait(lock, [this]() { return !m_ready.empty(); });
 

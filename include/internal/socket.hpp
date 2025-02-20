@@ -18,9 +18,11 @@ struct socket {
         std::unique_ptr<listener> lstnr;
         connection_tuple conn;
 
+        // TODO: Take the fd as a parameter unconditionally.
         storage() noexcept : bound_fd(constants::UNINITIALISED_FD) {}
         ~storage() noexcept {}
 
+        // TODO: Remove or simplify destroy/construct_from methods.
         void destroy(enum state s) const noexcept {
             if (s == state::listening) {
                 lstnr.~unique_ptr<listener>();

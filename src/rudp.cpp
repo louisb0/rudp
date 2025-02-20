@@ -17,11 +17,13 @@ namespace rudp {
 
 int socket(void) noexcept {
     rudpfd_t fd = internal::next_fd++;
+    // TODO: Use emplace properly.
     internal::g_sockets.emplace(fd, internal::socket{});
     return fd;
 }
 
 int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
+    // TODO: Check addr is not nullptr.
     if (addr->sa_family != AF_INET) {
         errno = EAFNOSUPPORT;
         return -1;
@@ -150,6 +152,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
 }
 
 int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
+    // TODO: Check addr is not nullptr.
+
     if (addrlen != sizeof(struct sockaddr_in)) {
         errno = EINVAL;
         return -1;
@@ -180,6 +184,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         bind_addr.sin_family = AF_INET;
         bind_addr.sin_addr.s_addr = INADDR_ANY;
         bind_addr.sin_port = 0;
+
         if (rudp::bind(sockfd, reinterpret_cast<struct sockaddr *>(&bind_addr), sizeof(bind_addr)) <
             0) {
             return -1;
@@ -232,7 +237,8 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
 
     conn->wait_for_established();
 
-    // Insert the conncetion and transition socket state.
+    // Insert the connection and transition socket state.
+    // TODO: Use emplace properly.
     auto [conn_it, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
     RUDP_ASSERT(inserted, "connect() will not insert an existing connection.");
 
