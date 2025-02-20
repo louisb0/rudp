@@ -1,4 +1,4 @@
-.PHONY: all clean rebuild
+.PHONY: all clean rebuild test
 
 all:
 	mkdir -p build
@@ -8,3 +8,6 @@ clean:
 	rm -rf build
 
 rebuild: clean all
+
+test:
+	cd build && ctest
