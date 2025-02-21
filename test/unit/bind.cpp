@@ -2,7 +2,6 @@
 #include <netinet/in.h>
 #include <sys/socket.h>
 
-#include <cerrno>
 #include <rudp.hpp>
 
 class BindTest : public testing::Test {
@@ -80,8 +79,7 @@ TEST_F(BindTest, SocketConnected) {
 TEST_F(BindTest, ForwardsErrno) {
     int fd = rudp::socket();
 
-    auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
-    addr_in->sin_port = htons(80);  // requires root
+    reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port = htons(80);  // requires root
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), -1);
     ASSERT_EQ(errno, EACCES) << "errno must be forwarded to the caller.";
