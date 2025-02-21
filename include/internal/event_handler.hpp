@@ -22,6 +22,7 @@ public:
 
 protected:
     linuxfd_t m_fd;
+    // TODO: There's only one event loop - why have many pointers?
     event_loop *m_event_loop;
     bool m_initialised;
 

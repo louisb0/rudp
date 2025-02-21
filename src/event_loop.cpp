@@ -94,6 +94,9 @@ event_loop::result event_loop::instance() noexcept {
     return {.err = error, .instance = instance};
 }
 
+// TODO: Consider simplifying this to a call of (fd, fn_ptr, type). We can then create a sortable ID
+// of type+fd for batching, then just dispatch to the handle_events() function directly. The
+// trade-off here is that we can't assert state in this call, but, that state doesn't need to exist.
 bool event_loop::add_handler(event_handler *handler) noexcept {
     RUDP_ASSERT(handler, "A handler should never be null.");
     RUDP_ASSERT(!handler->m_initialised, "A handler must not be initialised twice.");
