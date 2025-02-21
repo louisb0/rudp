@@ -2,6 +2,7 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
+// TODO: Check imports project-wide.
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -53,6 +54,7 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     // Create and bind an underlying FD.
     linuxfd_t fd = internal::create_raw_socket();
     if (fd < 0) {
+        // NOTE: errno is forwarded from socket() or fcntl().
         return -1;
     }
 
@@ -173,7 +175,11 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
 }
 
 int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
-    // TODO: Check addr is not nullptr.
+    // Argument validation.
+    if (addr == nullptr) {
+        errno = EINVAL;
+        return -1;
+    }
 
     if (addrlen != sizeof(struct sockaddr_in)) {
         errno = EINVAL;
@@ -185,45 +191,45 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
-    // Socket lookup and state validation.
-    auto it = internal::g_sockets.find(sockfd);
-    if (it == internal::g_sockets.end()) {
+    // Socket validation.
+    auto sock_it = internal::g_sockets.find(sockfd);
+    if (sock_it == internal::g_sockets.end()) {
         errno = EBADF;
         return -1;
     }
 
-    internal::socket &sock = it->second;
+    internal::socket &sock = sock_it->second;
     if (!sock.created() && !sock.bound()) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
-    // Ensure socket is bound, either existing or implicitly.
+    // Ensure the socket is bound so that we can identify the connection.
     if (sock.created()) {
-        struct sockaddr_in bind_addr = {};
+        struct sockaddr_in bind_addr{};
         bind_addr.sin_family = AF_INET;
         bind_addr.sin_addr.s_addr = INADDR_ANY;
         bind_addr.sin_port = 0;
 
         if (rudp::bind(sockfd, reinterpret_cast<struct sockaddr *>(&bind_addr), sizeof(bind_addr)) <
             0) {
+            RUDP_ASSERT(
+                errno == ENOMEM || errno == EADDRINUSE,
+                "bind() can only fail with resource exhaustion errors after argument validation.");
             return -1;
         }
     }
-    RUDP_ASSERT(sock.bound(), "A socket must have an allocated port prior to becoming connected.");
 
-    // Get local address information for internal::connection_tuple.
     linuxfd_t fd = sock.fd();
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
-                "A socket in the BOUND state must hold a valid linuxfd_t.");
+                "A bound socket must have a valid underlying file descriptor.");
 
+    // Construct the connection identifier.
     struct sockaddr_in local_addr;
-    socklen_t local_len = sizeof(local_addr);
-    if (getsockname(fd, reinterpret_cast<struct sockaddr *>(&local_addr), &local_len) < 0) {
-        return -1;
-    }
+    socklen_t local_addrlen = sizeof(local_addr);
+    RUDP_ASSERT(getsockname(fd, reinterpret_cast<struct sockaddr *>(&local_addr), &local_addrlen) ==
+                0);
 
-    // Create and initialise the connection.
     internal::connection_tuple tuple = {
         .src_ip = local_addr.sin_addr.s_addr,
         .src_port = local_addr.sin_port,
@@ -231,38 +237,34 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         .dst_ip = (reinterpret_cast<struct sockaddr_in *>(addr))->sin_addr.s_addr,
     };
 
+    // Create and initialise the connection.
     if (internal::g_connections.contains(tuple)) {
         errno = EADDRINUSE;
         return -1;
     }
 
-    auto conn = std::make_unique<internal::connection>(fd, tuple);
-    if (!conn) {
+    auto connection = std::make_unique<internal::connection>(fd, tuple);
+    if (!connection) {
         errno = ENOMEM;
         return -1;
     }
 
-    if (!internal::event_loop::add_handler(conn.get())) {
-        // NOTE: add_handler() sets errno.
+    if (!internal::event_loop::add_handler(connection.get())) {
+        // NOTE: errno is forwarded from epoll_ctl().
         return -1;
     }
-    conn->assert_initialised_handler(__PRETTY_FUNCTION__);
+    connection->assert_initialised_handler(__PRETTY_FUNCTION__);
 
-    // Send the SYN and await connection establishment.
-    if (!conn->syn()) {
-        // NOTE: syn() sets errno.
+    // Block until a connection is established.
+    if (!connection->syn()) {
+        // NOTE: errno is forwarded from sendto().
         return -1;
     }
+    connection->wait_for_established();
 
-    conn->wait_for_established();
-
-    // Insert the connection and transition socket state.
-    // TODO: Use emplace properly.
-    auto [conn_it, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
-    RUDP_ASSERT(inserted, "connect() will not insert an existing connection.");
-
+    // Transition state.
+    internal::g_connections[tuple] = std::move(connection);
     sock.data = tuple;
-
     return 0;
 }
 
