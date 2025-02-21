@@ -66,6 +66,7 @@ enable_testing()
 add_executable(tests
     test/unit/bind.cpp
     test/unit/listen.cpp
+    test/unit/accept.cpp
 )
 target_link_libraries(tests PRIVATE ${PROJECT_NAME} GTest::gtest_main)
 target_compile_options(tests PRIVATE ${COMMON_WARNINGS})

@@ -100,7 +100,15 @@ void listener::handle_events() noexcept {
         auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
         RUDP_ASSERT(inserted, "The listener will not insert an existing connection.");
 
-        // TODO: Create a socket, place on the queue, notify.
+        // Spawn the socket and signal the user thread.
+        rudpfd_t newfd = internal::g_next_fd++;
+        internal::socket sock;
+        sock.data = tuple;
+
+        internal::g_sockets[newfd] = std::move(sock);
+
+        m_ready.push(newfd);
+        m_cv.notify_one();
     }
 }
 

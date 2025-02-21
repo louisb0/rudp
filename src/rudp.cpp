@@ -2,7 +2,6 @@
 #include <sys/socket.h>
 #include <sys/types.h>
 
-#include <cerrno>
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -114,46 +113,57 @@ int listen(int sockfd, int backlog) noexcept {
 }
 
 int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
-    if (addr != nullptr) {
-        if (addrlen == nullptr || *addrlen != sizeof(struct sockaddr_in)) {
+    bool fillout_peer_addr = (addr != nullptr);
+
+    // Argument validation.
+    if (fillout_peer_addr) {
+        if (addrlen == nullptr) {
+            errno = EINVAL;
+            return -1;
+        }
+
+        if (*addrlen != sizeof(struct sockaddr_in)) {
             errno = EINVAL;
             return -1;
         }
     }
 
-    // Socket lookup and state validation.
-    auto it = internal::g_sockets.find(sockfd);
-    if (it == internal::g_sockets.end()) {
+    // Socket validation.
+    auto sock_it = internal::g_sockets.find(sockfd);
+    if (sock_it == internal::g_sockets.end()) {
         errno = EBADF;
         return -1;
     }
 
-    internal::socket &sock = it->second;
+    internal::socket &sock = sock_it->second;
     if (!sock.listening()) {
         errno = EOPNOTSUPP;
         return -1;
     }
 
-    // Validate state of the listener & forward blocking accept call.
+    // Block until we have a connection to return.
     internal::listener *listener = sock.listener();
     RUDP_ASSERT(listener != nullptr, "A listening socket's unique_ptr must be non-null.");
     listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     rudpfd_t fd = listener->wait_and_accept();
 
-    // Validate state of the accepted socket.
     RUDP_ASSERT(internal::g_sockets.contains(fd),
                 "wait_and_accept() must return a valid rudpfd_t.");
     RUDP_ASSERT(internal::g_sockets.at(fd).connected(),
-                "Accepted socket must be in CONNECTED state.");
-    auto &accepted_sock = internal::g_sockets.at(fd);
+                "A socket freshly spawned by listen() must be connected.");
 
-    // Fill out the callers addr and addrlen.
-    if (addr != nullptr && addrlen != nullptr) {
-        struct sockaddr_in peer_addr = {};
+    auto &spawned = internal::g_sockets.at(fd);
+
+    // Conditionally fill out the peer address information.
+    if (fillout_peer_addr) {
+        RUDP_ASSERT(addrlen != nullptr,
+                    "addrlen must be validated as non-null when filling out the peer address.");
+
+        struct sockaddr_in peer_addr{};
         peer_addr.sin_family = AF_INET;
-        peer_addr.sin_addr.s_addr = accepted_sock.tuple().dst_ip;
-        peer_addr.sin_port = accepted_sock.tuple().dst_port;
+        peer_addr.sin_addr.s_addr = spawned.tuple().dst_ip;
+        peer_addr.sin_port = spawned.tuple().dst_port;
 
         memcpy(addr, &peer_addr, std::min(static_cast<unsigned long>(*addrlen), sizeof(peer_addr)));
         *addrlen = sizeof(peer_addr);
