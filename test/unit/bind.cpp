@@ -22,7 +22,7 @@ TEST_F(BindTest, AddrNull) {
     ASSERT_EQ(errno, EINVAL);
 }
 
-TEST_F(BindTest, AddrSizeNotInet) {
+TEST_F(BindTest, AddrlenNotInet) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr) - 1), -1);
