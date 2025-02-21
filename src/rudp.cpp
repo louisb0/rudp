@@ -22,7 +22,7 @@ int socket(void) noexcept {
 }
 
 int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
-    // Address validation.
+    // Argument validation.
     if (addr == nullptr) {
         errno = EINVAL;
         return -1;
@@ -68,20 +68,24 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
 }
 
 int listen(int sockfd, int backlog) noexcept {
-    // TODO: Accept -1 as an indicator of no backlog.
-    if (backlog < 0 || backlog > SOMAXCONN) {
+    // Argument validation.
+    if (backlog == -1 || backlog > SOMAXCONN) {
+        backlog = SOMAXCONN;
+    }
+
+    if (backlog <= 0) {
         errno = EINVAL;
         return -1;
     }
 
-    // Socket lookup and state validation.
-    auto it = internal::g_sockets.find(sockfd);
-    if (it == internal::g_sockets.end()) {
+    // Socket validation.
+    auto sock_it = internal::g_sockets.find(sockfd);
+    if (sock_it == internal::g_sockets.end()) {
         errno = EBADF;
         return -1;
     }
 
-    internal::socket &sock = it->second;
+    internal::socket &sock = sock_it->second;
     if (!sock.bound()) {
         errno = EOPNOTSUPP;
         return -1;
@@ -89,7 +93,7 @@ int listen(int sockfd, int backlog) noexcept {
 
     linuxfd_t fd = sock.fd();
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
-                "A socket in the BOUND state must hold a valid linuxfd_t.");
+                "A bound socket must have a valid underlying file descriptor.");
 
     // Create and initialise the listener.
     auto listener = std::make_unique<internal::listener>(fd, backlog);
@@ -99,12 +103,12 @@ int listen(int sockfd, int backlog) noexcept {
     }
 
     if (!internal::event_loop::add_handler(listener.get())) {
-        // NOTE: add_handler() sets errno.
+        // NOTE: errno is forwarded from epoll_ctl().
         return -1;
     }
     listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
-    // Update the socket state.
+    // Transition state.
     sock.data = std::move(listener);
     return 0;
 }
