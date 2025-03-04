@@ -18,9 +18,9 @@
 
 namespace rudp::internal {
 
+// TODO: Remove internal:: prefix clutter.
 void listener::handle_events() noexcept {
-    assert_initialised_handler(__PRETTY_FUNCTION__);
-    m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
+    assert_external_state(__PRETTY_FUNCTION__);
 
     while (true) {
         // Receive pending data.
@@ -48,6 +48,7 @@ void listener::handle_events() noexcept {
         }
 
         // Create and bind a new FD for the connection to be spawned.
+        // TODO: Check it's valid.
         // TODO: Consider RAII, e.g. internal::closing<linuxfd_t>
         linuxfd_t fd = internal::create_raw_socket();
 
@@ -84,18 +85,22 @@ void listener::handle_events() noexcept {
         conn->set_peer(connecting_addr);
 
         // Register the handler and respond.
-        if (!internal::event_loop::add_handler(conn.get())) {
+        auto [err, event_loop] = internal::event_loop::instance();
+        RUDP_ASSERT(err == internal::event_loop::result::error::none && event_loop != nullptr,
+                    "assert_external_state() guarantees an event loop.");
+
+        if (!event_loop->add_handler(internal::handler_type::connection, fd,
+                                     [conn = conn.get()]() { conn->handle_events(); })) {
             close(fd);
             continue;
         }
-        conn->assert_initialised_handler(__PRETTY_FUNCTION__);
 
         if (!conn->synack(pkt)) {
-            internal::event_loop::remove_handler(conn.get());
+            event_loop->remove_handler(internal::handler_type::connection, fd);
             close(fd);
             continue;
         }
-        conn->assert_state(__PRETTY_FUNCTION__);
+        conn->assert_state_transition(__PRETTY_FUNCTION__);
 
         auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
         RUDP_ASSERT(inserted, "The listener will not insert an existing connection.");
@@ -113,8 +118,7 @@ void listener::handle_events() noexcept {
 }
 
 rudpfd_t listener::wait_and_accept() noexcept {
-    assert_initialised_handler(__PRETTY_FUNCTION__);
-    m_event_loop->assert_user_thread(__PRETTY_FUNCTION__);
+    assert_external_state(__PRETTY_FUNCTION__);
 
     // Block until there is a ready socket.
     std::unique_lock<std::mutex> lock(m_mtx);
@@ -123,6 +127,17 @@ rudpfd_t listener::wait_and_accept() noexcept {
     rudpfd_t fd = m_ready.front();
     m_ready.pop();
     return fd;
+}
+
+void listener::assert_external_state(const char *caller) const noexcept {
+    auto [err, event_loop] = internal::event_loop::instance();
+    RUDP_ASSERT(err == internal::event_loop::result::error::none && event_loop != nullptr,
+                "A listener must not exist unless an event loop was succesfully created.");
+
+    event_loop->assert_initialised_state(caller);
+    event_loop->assert_handler_exists(caller, handler_type::listener, m_fd);
+
+    RUDP_ASSERT(is_valid_sockfd(m_fd), "A listener's underlying file descriptor must be valid.");
 }
 
 }  // namespace rudp::internal

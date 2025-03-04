@@ -28,6 +28,7 @@
 #define _RUDP_GET_MACRO(_1, _2, _3, _4, _5, NAME, ...) NAME
 
 // TODO: Consistent message style, e.g. 'must' vs 'will'.
+// TODO: Only have a message when it is neccesary.
 #define RUDP_ASSERT(...)                                                                     \
     _RUDP_GET_MACRO(__VA_ARGS__, RUDP_ASSERT_N, RUDP_ASSERT_N, RUDP_ASSERT_N, RUDP_ASSERT_N, \
                     RUDP_ASSERT_1)(__VA_ARGS__)

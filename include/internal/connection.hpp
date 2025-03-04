@@ -3,14 +3,15 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 
+#include <condition_variable>
 #include <cstddef>
 #include <cstring>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
-#include "internal/event_handler.hpp"
 #include "internal/packet.hpp"
 
 namespace rudp::internal {
@@ -70,10 +71,10 @@ struct connection_tuple_hash {
     }
 };
 
-class connection : public event_handler {
+class connection {
 public:
     connection(linuxfd_t fd, connection_tuple tuple) noexcept
-        : event_handler(fd),
+        : m_fd(fd),
           m_tuple(tuple),
           m_peer_known(false),
           m_state(state::closed),
@@ -89,25 +90,32 @@ public:
     void wait_for_established() noexcept;
     void set_peer(const sockaddr_in &addr);
 
-    void assert_state(const char *caller) const noexcept;
+    void assert_state_transition(const char *caller) const noexcept;
 
 private:
+    const linuxfd_t m_fd;
     connection_tuple m_tuple;
     bool m_peer_known;
 
+    std::condition_variable m_cv;
+    std::mutex m_mtx;
+
+    // TODO: Create as it's own object and encapsulate the history; we could assert a series of
+    // state transitions.
     enum class state {
         closed,
         syn_sent,
         syn_rcvd,
         established,
     };
-    // TODO: This is a weird coupling which could be abstracted into state itself.
     enum state m_state;
     enum state m_prev_state;
 
     u32 m_seqnum;
 
     [[nodiscard]] bool send_packet(packet_header pkt) noexcept;
+
+    void assert_external_state(const char *caller) const noexcept;
 };
 
 extern std::unordered_map<connection_tuple, std::unique_ptr<connection>, connection_tuple_hash>

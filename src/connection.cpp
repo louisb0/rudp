@@ -15,8 +15,7 @@ std::unordered_map<connection_tuple, std::unique_ptr<connection>, connection_tup
     g_connections;
 
 void connection::handle_events() noexcept {
-    assert_initialised_handler(__PRETTY_FUNCTION__);
-    m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
+    assert_external_state(__PRETTY_FUNCTION__);
 
     while (true) {
         // Receive pending data.
@@ -92,9 +91,8 @@ void connection::handle_events() noexcept {
 }
 
 bool connection::syn() noexcept {
-    assert_initialised_handler(__PRETTY_FUNCTION__);
-    m_event_loop->assert_user_thread(__PRETTY_FUNCTION__);
-
+    // NOTE: We are not calling assert_external_state() as this is called only from connect(), which
+    // guarantees everything we would assert.
     RUDP_ASSERT(m_prev_state == state::closed, "A connection must be closed to send a plain SYN.");
     RUDP_ASSERT(m_state == state::closed, "A connection must be closed to send a plain SYN.");
 
@@ -115,9 +113,8 @@ bool connection::syn() noexcept {
 }
 
 bool connection::synack(packet_header pkt) noexcept {
-    assert_initialised_handler(__PRETTY_FUNCTION__);
-    m_event_loop->assert_event_thread(__PRETTY_FUNCTION__);
-
+    // NOTE: We are not calling assert_external_state() as this is called only from
+    // listener::handle_events(), which guarantees everything we would assert.
     RUDP_ASSERT(m_prev_state == state::closed,
                 "A connection must be closed to process a plain SYN.");
     RUDP_ASSERT(m_state == state::closed, "A connection must be closed to process a plain SYN.");
@@ -145,8 +142,8 @@ void connection::set_peer(const sockaddr_in &addr) {
 }
 
 void connection::wait_for_established() noexcept {
-    assert_initialised_handler(__PRETTY_FUNCTION__);
-    m_event_loop->assert_user_thread(__PRETTY_FUNCTION__);
+    // NOTE: We are not calling assert_external_state() for the same reason as connection::syn()
+    // (for which this is called directly after; see above).
 
     // TODO: This doesn't account for error states, e.g. a reset or timeout.
     std::unique_lock<std::mutex> lock(m_mtx);
@@ -155,13 +152,39 @@ void connection::wait_for_established() noexcept {
 
 // NOTE: A state transition table is arguably cleaner but a pain to maintain. It may be a better
 // choice as complexity grows.
-void connection::assert_state(const char *caller) const noexcept {
+void connection::assert_state_transition(const char *caller) const noexcept {
     if (m_prev_state == state::closed) {
         RUDP_ASSERT(m_state == state::closed || m_state == state::syn_rcvd,
                     "[%s] A connection's closed state can lead only to remaining closed or "
                     "receiving a SYN.",
                     caller);
     }
+}
+
+void connection::assert_external_state(const char *caller) const noexcept {
+    auto [err, event_loop] = internal::event_loop::instance();
+    RUDP_ASSERT(err == internal::event_loop::result::error::none && event_loop != nullptr,
+                "A connection must not exist unless an event loop was succesfully created.");
+
+    event_loop->assert_initialised_state(caller);
+    event_loop->assert_handler_exists(caller, handler_type::connection, m_fd);
+
+    RUDP_ASSERT(is_valid_sockfd(m_fd), "A connection's underlying file descriptor must be valid.");
+
+    // NOTE: This looks like a race-condition - the user thread blocks waiting for us to
+    // be established before registering us to g_connections, so, if our assert overlaps with that
+    // transition we could have (!registered && m_state == state::established). However, we must
+    // signal this transition with a condition variable, which means we can't be running this
+    // assert when that occurs; keep this in mind as I don't think it's worth synchronising.
+    // TODO: Consider whether this makes sense, or at least a better way of doing it.
+    bool registered = (g_connections.count(m_tuple) == 1);
+    bool valid_preestablished_state =
+        (!registered && (m_state == state::closed || m_state == state::syn_sent));
+    bool valid_established_state =
+        (registered && (m_state == state::syn_rcvd || m_state == state::established));
+
+    RUDP_ASSERT(valid_preestablished_state || valid_established_state,
+                "A connection must only be registered once a valid packet has been received.");
 }
 
 }  // namespace rudp::internal

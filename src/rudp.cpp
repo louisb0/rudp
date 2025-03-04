@@ -103,11 +103,22 @@ int listen(int sockfd, int backlog) noexcept {
         return -1;
     }
 
-    if (!internal::event_loop::add_handler(listener.get())) {
+    auto [err, event_loop] = internal::event_loop::instance();
+    if (err != internal::event_loop::result::error::none) {
+        // NOTE: errno is already set in the epoll_creation case.
+        if (err == internal::event_loop::result::error::thread_creation) {
+            errno = ENOMEM;
+        }
+
+        return -1;
+    }
+    event_loop->assert_initialised_state(__PRETTY_FUNCTION__);
+
+    if (!event_loop->add_handler(internal::handler_type::listener, fd,
+                                 [listener = listener.get()]() { listener->handle_events(); })) {
         // NOTE: errno is forwarded from epoll_ctl().
         return -1;
     }
-    listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     // Transition state.
     sock.data = std::move(listener);
@@ -146,10 +157,8 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     // Block until we have a connection to return.
     internal::listener *listener = sock.listener();
     RUDP_ASSERT(listener != nullptr, "A listening socket's unique_ptr must be non-null.");
-    listener->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     rudpfd_t fd = listener->wait_and_accept();
-
     RUDP_ASSERT(internal::g_sockets.contains(fd),
                 "wait_and_accept() must return a valid rudpfd_t.");
     RUDP_ASSERT(internal::g_sockets.at(fd).connected(),
@@ -249,14 +258,27 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
         return -1;
     }
 
-    if (!internal::event_loop::add_handler(connection.get())) {
+    auto [err, event_loop] = internal::event_loop::instance();
+    if (err != internal::event_loop::result::error::none) {
+        // NOTE: errno is already set in the epoll_creation case.
+        if (err == internal::event_loop::result::error::thread_creation) {
+            errno = ENOMEM;
+        }
+
+        return -1;
+    }
+    event_loop->assert_initialised_state(__PRETTY_FUNCTION__);
+
+    if (!event_loop->add_handler(
+            internal::handler_type::connection, fd,
+            [connection = connection.get()]() { connection->handle_events(); })) {
         // NOTE: errno is forwarded from epoll_ctl().
         return -1;
     }
-    connection->assert_initialised_handler(__PRETTY_FUNCTION__);
 
     // Block until a connection is established.
     if (!connection->syn()) {
+        event_loop->remove_handler(internal::handler_type::connection, fd);
         // NOTE: errno is forwarded from sendto().
         return -1;
     }
