@@ -59,7 +59,9 @@ int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     if (::bind(fd, addr, addrlen) < 0) {
-        internal::preserve_errno([fd]() { ::close(fd); });
+        int saved = errno;
+        ::close(fd);
+        errno = saved;
         return -1;
     }
 
@@ -171,11 +173,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
         RUDP_ASSERT(addrlen != nullptr,
                     "addrlen must be validated as non-null when filling out the peer address.");
 
-        struct sockaddr_in peer_addr{};
-        peer_addr.sin_family = AF_INET;
-        peer_addr.sin_addr.s_addr = spawned.tuple().dst_ip;
-        peer_addr.sin_port = spawned.tuple().dst_port;
-
+        struct sockaddr_in peer_addr = spawned.connection()->peer();
         memcpy(addr, &peer_addr, std::min(static_cast<unsigned long>(*addrlen), sizeof(peer_addr)));
         *addrlen = sizeof(peer_addr);
     }
@@ -233,26 +231,8 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     RUDP_ASSERT(internal::is_valid_sockfd(fd),
                 "A bound socket must have a valid underlying file descriptor.");
 
-    // Construct the connection identifier.
-    struct sockaddr_in local_addr;
-    socklen_t local_addrlen = sizeof(local_addr);
-    RUDP_ASSERT(getsockname(fd, reinterpret_cast<struct sockaddr *>(&local_addr), &local_addrlen) ==
-                0);
-
-    internal::connection_tuple tuple = {
-        .src_ip = local_addr.sin_addr.s_addr,
-        .src_port = local_addr.sin_port,
-        .dst_port = (reinterpret_cast<struct sockaddr_in *>(addr))->sin_port,
-        .dst_ip = (reinterpret_cast<struct sockaddr_in *>(addr))->sin_addr.s_addr,
-    };
-
-    // Create and initialise the connection.
-    if (internal::g_connections.contains(tuple)) {
-        errno = EADDRINUSE;
-        return -1;
-    }
-
-    auto connection = std::make_unique<internal::connection>(fd, tuple);
+    // Create and register the connection.
+    auto connection = std::make_unique<internal::connection>(fd);
     if (!connection) {
         errno = ENOMEM;
         return -1;
@@ -277,7 +257,7 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     }
 
     // Block until a connection is established.
-    if (!connection->syn()) {
+    if (!connection->active_open(*reinterpret_cast<sockaddr_in *>(addr))) {
         event_loop->remove_handler(internal::handler_type::connection, fd);
         // NOTE: errno is forwarded from sendto().
         return -1;
@@ -285,13 +265,13 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     connection->wait_for_established();
 
     // Transition state.
-    internal::g_connections[tuple] = std::move(connection);
-    sock.data = tuple;
+    sock.data = std::move(connection);
     return 0;
 }
 
 size_t send(int sockfd, const void *buf, size_t len, int flags) noexcept;
 size_t recv(int sockfd, void *buf, size_t len, int flags) noexcept;
+
 int close(int sockfd) noexcept;
 
 }  // namespace rudp

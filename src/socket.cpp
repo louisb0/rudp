@@ -13,7 +13,6 @@ rudpfd_t g_next_fd = 0;
 std::unordered_map<rudpfd_t, socket> g_sockets;
 
 linuxfd_t create_raw_socket() {
-    // TODO: Consider some kind of RAII wrapper.
     linuxfd_t fd = ::socket(AF_INET, SOCK_DGRAM, 0);
     if (fd < 0) {
         return -1;

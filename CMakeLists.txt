@@ -32,6 +32,8 @@ add_library(${PROJECT_NAME}
     src/listener.cpp
     src/event_loop.cpp
     src/connection.cpp
+    src/state.cpp
+    src/packet.cpp
 )
 
 target_include_directories(${PROJECT_NAME}

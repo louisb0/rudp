@@ -51,7 +51,7 @@ private:
     std::promise<void> m_thread_started;
     std::unordered_map<u64, std::function<void()>> m_handlers;
 
-    u64 calculate_id(handler_type type, linuxfd_t fd) const noexcept;
+    [[nodiscard]] static u64 calculate_id(handler_type type, linuxfd_t fd) noexcept;
 };
 
 }  // namespace rudp::internal

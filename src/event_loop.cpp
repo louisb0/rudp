@@ -24,6 +24,9 @@ static constexpr u16 max_events = 32;
 RUDP_STATIC_ASSERT(max_events > 0,
                    "max_events must be non-negative or else epoll_wait() will error.");
 
+// TODO: This is just hard to follow and I don't like it. We commonly want to assert which thread
+// we're running on, but need to go through this disgusting interface every time on hot paths. We
+// should just be able to have a pointer somewhere.
 void event_loop::loop() noexcept {
     m_running = true;
 
@@ -51,8 +54,7 @@ void event_loop::loop() noexcept {
 
         for (int i = 0; i < nfds; i++) {
             u64 id = events[i].data.u64;
-            // TODO: Use .contains()
-            RUDP_ASSERT(m_handlers.count(id) == 1,
+            RUDP_ASSERT(m_handlers.contains(id),
                         "There must exist a handler for every epoll registered file descriptor.");
 
             m_handlers[id]();
@@ -108,7 +110,7 @@ bool event_loop::add_handler(handler_type type, linuxfd_t fd,
                 "add_handler() must never be called with an invalid underlying file descriptor.");
 
     u64 id = calculate_id(type, fd);
-    RUDP_ASSERT(m_handlers.count(id) == 0, "A handler must not be added twice.");
+    RUDP_ASSERT(!m_handlers.contains(id), "A handler must not be added twice.");
 
     // Register the handler.
     struct epoll_event ev = {
@@ -135,7 +137,7 @@ bool event_loop::remove_handler(handler_type type, linuxfd_t fd) noexcept {
         "remove_handler() must never be called with an invalid underlying file descriptor.");
 
     u64 id = calculate_id(type, fd);
-    RUDP_ASSERT(m_handlers.count(id) == 1, "A handler must exist in order to be deleted.");
+    RUDP_ASSERT(m_handlers.contains(id), "A handler must exist in order to be deleted.");
 
     // Deregister the handler.
     if (epoll_ctl(m_epollfd, EPOLL_CTL_DEL, fd, nullptr) < 0) {
@@ -149,7 +151,7 @@ bool event_loop::remove_handler(handler_type type, linuxfd_t fd) noexcept {
     return true;
 }
 
-u64 event_loop::calculate_id(handler_type type, linuxfd_t fd) const noexcept {
+u64 event_loop::calculate_id(handler_type type, linuxfd_t fd) noexcept {
     return (static_cast<u64>(type) << 32) | static_cast<u32>(fd);
 }
 
@@ -177,7 +179,7 @@ void event_loop::assert_user_thread(const char *caller) const noexcept {
 void event_loop::assert_handler_exists(const char *caller, handler_type type,
                                        linuxfd_t fd) const noexcept {
     u64 id = calculate_id(type, fd);
-    RUDP_ASSERT(m_handlers.count(id) == 1,
+    RUDP_ASSERT(m_handlers.contains(id),
                 "[%s] The handler of type=%d and fd=%d must be registered.", caller,
                 static_cast<u32>(type), fd);
 }

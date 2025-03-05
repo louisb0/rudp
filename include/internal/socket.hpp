@@ -16,7 +16,7 @@ struct socket {
         std::monostate,                     // created
         linuxfd_t,                          // bound
         std::unique_ptr<class listener>,    // listening
-        connection_tuple                    // connected
+        std::unique_ptr<class connection>   // connected
      > data;
     // clang-format on
 
@@ -33,7 +33,7 @@ struct socket {
     }
 
     bool connected() const noexcept {
-        return std::holds_alternative<connection_tuple>(data);
+        return std::holds_alternative<std::unique_ptr<class connection>>(data);
     }
 
     linuxfd_t fd() const noexcept {
@@ -46,9 +46,9 @@ struct socket {
         return std::get<std::unique_ptr<class listener>>(data).get();
     }
 
-    const connection_tuple &tuple() const noexcept {
-        RUDP_ASSERT(connected(), "A socket must be connected for a connection tuple to exist.");
-        return std::get<connection_tuple>(data);
+    class connection *connection() const noexcept {
+        RUDP_ASSERT(connected(), "A socket must be connected for a connection to exist.");
+        return std::get<std::unique_ptr<class connection>>(data).get();
     }
 };
 

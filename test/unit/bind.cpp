@@ -75,7 +75,6 @@ TEST_F(BindTest, SocketConnected) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket cannot be bound once connected.";
 }
 
-// TODO: We should instead test the preserve_errno() utility function separately.
 TEST_F(BindTest, ForwardsErrno) {
     int fd = rudp::socket();
 

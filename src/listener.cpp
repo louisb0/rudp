@@ -20,20 +20,13 @@
 namespace rudp::internal {
 
 void listener::handle_events() noexcept {
-    // TODO: Asserting which thread this is running from would be nice, but requires an event_loop
-    // pointer. This is on the hot-path so I'd like to not call event_loop::instance() every call.
     assert_external_state(__PRETTY_FUNCTION__);
 
     while (true) {
-        // Receive pending data.
-        packet_header pkt;
-        sockaddr_in connecting_addr{};
-        socklen_t connecting_addr_len = sizeof(connecting_addr);
+        sockaddr_in peer_addr{};
 
-        ssize_t bytes =
-            recvfrom(m_fd, &pkt, sizeof(pkt), 0,
-                     reinterpret_cast<struct sockaddr *>(&connecting_addr), &connecting_addr_len);
-        if (bytes < 0) {
+        std::optional<packet> packet_opt = packet::recvfrom(m_fd, &peer_addr);
+        if (!packet_opt.has_value()) {
             RUDP_ASSERT(
                 errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR,
                 "recvfrom() can only fail due to non-blocking or interruption, but we got %s.",
@@ -41,11 +34,12 @@ void listener::handle_events() noexcept {
             break;
         }
 
-        if (connecting_addr.sin_family != AF_INET) {
+        if (peer_addr.sin_family != AF_INET) {
             continue;
         }
 
-        if (pkt.flags != flag::SYN) {
+        packet packet = packet_opt.value();
+        if (packet.header.flags != static_cast<u8>(flag::SYN)) {
             continue;
         }
 
@@ -56,7 +50,6 @@ void listener::handle_events() noexcept {
         }
 
         struct sockaddr_in bound_addr{};
-        memset(&bound_addr, 0, sizeof(bound_addr));
         bound_addr.sin_family = AF_INET;
         bound_addr.sin_addr.s_addr = INADDR_ANY;
         bound_addr.sin_port = 0;
@@ -66,28 +59,13 @@ void listener::handle_events() noexcept {
             continue;
         }
 
-        // Create and initialise the connection.
-        connection_tuple tuple = {
-            .src_ip = bound_addr.sin_addr.s_addr,
-            .src_port = bound_addr.sin_port,
-            .dst_port = connecting_addr.sin_port,
-            .dst_ip = connecting_addr.sin_addr.s_addr,
-        };
-
-        if (g_connections.contains(tuple)) {
-            close(fd);
-            continue;
-        }
-
-        // TODO: Revisit after connection refactor.
-        auto connection = std::make_unique<internal::connection>(fd, tuple);
+        // Create and register the connection.
+        auto connection = std::make_unique<internal::connection>(fd);
         if (!connection) {
             close(fd);
             continue;
         }
-        connection->set_peer(connecting_addr);
 
-        // Register the handler and respond.
         auto [err, event_loop] = event_loop::instance();
         RUDP_ASSERT(err == event_loop::result::error::none && event_loop != nullptr,
                     "assert_external_state() guarantees an event loop.");
@@ -99,19 +77,15 @@ void listener::handle_events() noexcept {
             continue;
         }
 
-        if (!connection->synack(pkt)) {
+        // Respond to the SYN, create the socket, and signal the user thread.
+        if (!connection->passive_open(peer_addr)) {
             event_loop->remove_handler(handler_type::connection, fd);
             close(fd);
             continue;
         }
 
-        // Register the connection and signal the user thread.
-        RUDP_ASSERT(!g_connections.contains(tuple),
-                    "A listener must not attempt to insert an existing connection.");
-        g_connections.emplace(tuple, std::move(connection));
-
         rudpfd_t newfd = g_next_fd++;
-        g_sockets[newfd] = internal::socket{tuple};
+        g_sockets[newfd] = internal::socket{std::move(connection)};
 
         m_ready.push(newfd);
         m_cv.notify_one();
