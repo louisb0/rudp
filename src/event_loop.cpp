@@ -51,6 +51,7 @@ void event_loop::loop() noexcept {
 
         for (int i = 0; i < nfds; i++) {
             u64 id = events[i].data.u64;
+            // TODO: Use .contains()
             RUDP_ASSERT(m_handlers.count(id) == 1,
                         "There must exist a handler for every epoll registered file descriptor.");
 
