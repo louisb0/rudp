@@ -20,7 +20,6 @@ public:
     listener(linuxfd_t fd, u16 backlog) noexcept : m_fd(fd), m_backlog(backlog) {}
 
     void handle_events() noexcept;
-
     [[nodiscard]] rudpfd_t wait_and_accept() noexcept;
 
 private:

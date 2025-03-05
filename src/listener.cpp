@@ -4,6 +4,7 @@
 #include <sys/fcntl.h>
 #include <sys/socket.h>
 
+#include <cerrno>
 #include <condition_variable>
 #include <cstring>
 #include <mutex>
@@ -18,8 +19,9 @@
 
 namespace rudp::internal {
 
-// TODO: Remove internal:: prefix clutter.
 void listener::handle_events() noexcept {
+    // TODO: Asserting which thread this is running from would be nice, but requires an event_loop
+    // pointer. This is on the hot-path so I'd like to not call event_loop::instance() every call.
     assert_external_state(__PRETTY_FUNCTION__);
 
     while (true) {
@@ -31,11 +33,11 @@ void listener::handle_events() noexcept {
         ssize_t bytes =
             recvfrom(m_fd, &pkt, sizeof(pkt), 0,
                      reinterpret_cast<struct sockaddr *>(&connecting_addr), &connecting_addr_len);
-        if (bytes < 0 && errno == EWOULDBLOCK) {
-            // TODO: What about other errno?
-            break;
-        }
-        if (bytes == 0) {
+        if (bytes < 0) {
+            RUDP_ASSERT(
+                errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR,
+                "recvfrom() can only fail due to non-blocking or interruption, but we got %s.",
+                strerror(errno));
             break;
         }
 
@@ -48,69 +50,68 @@ void listener::handle_events() noexcept {
         }
 
         // Create and bind a new FD for the connection to be spawned.
-        // TODO: Check it's valid.
-        // TODO: Consider RAII, e.g. internal::closing<linuxfd_t>
-        linuxfd_t fd = internal::create_raw_socket();
+        linuxfd_t fd = create_raw_socket();
+        if (fd < 0) {
+            continue;
+        }
 
-        struct sockaddr_in new_addr;
-        // TODO: Don't use memset.
-        memset(&new_addr, 0, sizeof(new_addr));
-        new_addr.sin_family = AF_INET;
-        new_addr.sin_addr.s_addr = INADDR_ANY;
-        new_addr.sin_port = 0;
+        struct sockaddr_in bound_addr{};
+        memset(&bound_addr, 0, sizeof(bound_addr));
+        bound_addr.sin_family = AF_INET;
+        bound_addr.sin_addr.s_addr = INADDR_ANY;
+        bound_addr.sin_port = 0;
 
-        if (bind(fd, reinterpret_cast<struct sockaddr *>(&new_addr), sizeof(new_addr)) < 0) {
+        if (bind(fd, reinterpret_cast<struct sockaddr *>(&bound_addr), sizeof(bound_addr)) < 0) {
             close(fd);
             continue;
         }
 
         // Create and initialise the connection.
-        internal::connection_tuple tuple = {
-            .src_ip = new_addr.sin_addr.s_addr,
-            .src_port = new_addr.sin_port,
+        connection_tuple tuple = {
+            .src_ip = bound_addr.sin_addr.s_addr,
+            .src_port = bound_addr.sin_port,
             .dst_port = connecting_addr.sin_port,
             .dst_ip = connecting_addr.sin_addr.s_addr,
         };
 
-        if (internal::g_connections.contains(tuple)) {
+        if (g_connections.contains(tuple)) {
             close(fd);
             continue;
         }
 
-        auto conn = std::make_unique<internal::connection>(fd, tuple);
-        if (!conn) {
+        // TODO: Revisit after connection refactor.
+        auto connection = std::make_unique<internal::connection>(fd, tuple);
+        if (!connection) {
             close(fd);
             continue;
         }
-        conn->set_peer(connecting_addr);
+        connection->set_peer(connecting_addr);
 
         // Register the handler and respond.
-        auto [err, event_loop] = internal::event_loop::instance();
-        RUDP_ASSERT(err == internal::event_loop::result::error::none && event_loop != nullptr,
+        auto [err, event_loop] = event_loop::instance();
+        RUDP_ASSERT(err == event_loop::result::error::none && event_loop != nullptr,
                     "assert_external_state() guarantees an event loop.");
 
-        if (!event_loop->add_handler(internal::handler_type::connection, fd,
-                                     [conn = conn.get()]() { conn->handle_events(); })) {
+        if (!event_loop->add_handler(
+                handler_type::connection, fd,
+                [connection = connection.get()]() { connection->handle_events(); })) {
             close(fd);
             continue;
         }
 
-        if (!conn->synack(pkt)) {
-            event_loop->remove_handler(internal::handler_type::connection, fd);
+        if (!connection->synack(pkt)) {
+            event_loop->remove_handler(handler_type::connection, fd);
             close(fd);
             continue;
         }
-        conn->assert_state_transition(__PRETTY_FUNCTION__);
 
-        auto [_, inserted] = internal::g_connections.emplace(tuple, std::move(conn));
-        RUDP_ASSERT(inserted, "The listener will not insert an existing connection.");
+        // Register the connection and signal the user thread.
+        RUDP_ASSERT(!g_connections.contains(tuple),
+                    "A listener must not attempt to insert an existing connection.");
+        g_connections.emplace(tuple, std::move(connection));
 
-        // Spawn the socket and signal the user thread.
-        rudpfd_t newfd = internal::g_next_fd++;
-        internal::socket sock;
-        sock.data = tuple;
-
-        internal::g_sockets[newfd] = std::move(sock);
+        rudpfd_t newfd = g_next_fd++;
+        g_sockets[newfd] = internal::socket{tuple};
 
         m_ready.push(newfd);
         m_cv.notify_one();
@@ -120,7 +121,7 @@ void listener::handle_events() noexcept {
 rudpfd_t listener::wait_and_accept() noexcept {
     assert_external_state(__PRETTY_FUNCTION__);
 
-    // Block until there is a ready socket.
+    // Block until there is a socket on the queue.
     std::unique_lock<std::mutex> lock(m_mtx);
     m_cv.wait(lock, [this]() { return !m_ready.empty(); });
 
@@ -130,8 +131,8 @@ rudpfd_t listener::wait_and_accept() noexcept {
 }
 
 void listener::assert_external_state(const char *caller) const noexcept {
-    auto [err, event_loop] = internal::event_loop::instance();
-    RUDP_ASSERT(err == internal::event_loop::result::error::none && event_loop != nullptr,
+    auto [err, event_loop] = event_loop::instance();
+    RUDP_ASSERT(err == event_loop::result::error::none && event_loop != nullptr,
                 "A listener must not exist unless an event loop was succesfully created.");
 
     event_loop->assert_initialised_state(caller);
