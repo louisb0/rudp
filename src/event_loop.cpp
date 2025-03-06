@@ -25,9 +25,6 @@ static constexpr u16 max_events = 32;
 RUDP_STATIC_ASSERT(max_events > 0,
                    "max_events must be non-negative or else epoll_wait() will error.");
 
-// TODO: This is just hard to follow and I don't like it. We commonly want to assert which thread
-// we're running on, but need to go through this disgusting interface every time on hot paths. We
-// should just be able to have a pointer somewhere.
 void event_loop::loop() noexcept {
     m_running = true;
 
@@ -72,6 +69,10 @@ void event_loop::loop() noexcept {
     }
 };
 
+// TODO: This is just hard to follow and I don't like it. We commonly want to assert which thread
+// we're running on, but need to go through this disgusting interface (which leaks memory and
+// doesn't properly join the thread) every time on hot paths. We should just be able to have a
+// pointer somewhere.
 event_loop::result event_loop::instance() noexcept {
     static std::once_flag initialise;
     static event_loop *instance = nullptr;
