@@ -38,6 +38,8 @@ namespace internal::constants {
     inline constexpr u16 MAX_DATA_BYTES = 1024;
     inline constexpr std::chrono::milliseconds RETRANSMIT_TIME = std::chrono::milliseconds(5000);
 
+    inline constexpr u32 MAX_SEND_BUFFER_BYTES = (2 << 18);  // 256KB
+
     inline constexpr sockaddr_in UNINITIALISED_PEER = {
         .sin_family = AF_UNSPEC,
         .sin_port = 0,

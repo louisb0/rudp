@@ -22,7 +22,7 @@ TEST_F(AcceptTest, FilloutAddrlenNull) {
     ASSERT_EQ(rudp::listen(fd, 1), 0);
 
     ASSERT_EQ(rudp::accept(fd, &addr, nullptr), -1);
-    ASSERT_EQ(errno, EINVAL);
+    ASSERT_EQ(errno, EFAULT);
 }
 
 TEST_F(AcceptTest, FilloutAddrlenNotInet) {

@@ -19,7 +19,7 @@ TEST_F(BindTest, AddrNull) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, nullptr, 0), -1);
-    ASSERT_EQ(errno, EINVAL);
+    ASSERT_EQ(errno, EFAULT);
 }
 
 TEST_F(BindTest, AddrlenNotInet) {

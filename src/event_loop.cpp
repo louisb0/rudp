@@ -15,6 +15,7 @@
 
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
+#include "internal/socket.hpp"
 
 namespace rudp::internal {
 
@@ -58,6 +59,15 @@ void event_loop::loop() noexcept {
                         "There must exist a handler for every epoll registered file descriptor.");
 
             m_handlers[id]();
+        }
+
+        for (const auto &[_, socket] : g_sockets) {
+            if (socket.connected()) {
+                connection *connection = socket.connection();
+
+                connection->retransmit();
+                connection->process_sends();
+            }
         }
     }
 };

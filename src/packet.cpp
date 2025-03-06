@@ -92,17 +92,29 @@ std::optional<packet> packet::deserialise(const std::vector<u8> &data) {
     packet packet(header);
 
     // Data.
-    if (packet.header.length > 1) {
-        if (data.size() >= i + header.length) {
-            packet.m_data = std::vector<u8>(
-                data.begin() + static_cast<std::vector<u8>::difference_type>(i),
-                data.begin() + static_cast<std::vector<u8>::difference_type>(i + header.length));
-        } else {
-            return std::nullopt;
-        }
+    // TODO: This is a temporary hack - we should handle the case (nullopt) when we receive a
+    // malformed packet, not just truncate the data. The issue is we can't use length reliably as
+    // it's relative to acknum/seqnums and not the data.
+    if (i < data.size()) {
+        size_t remaining = data.size() - i;
+        size_t copy = std::min(remaining, static_cast<size_t>(constants::MAX_DATA_BYTES));
+
+        packet.m_data.assign(
+            data.begin() + static_cast<std::vector<u8>::difference_type>(i),
+            data.begin() + static_cast<std::vector<u8>::difference_type>(i + copy));
+
+        packet.header.length += static_cast<u32>(packet.m_data.size());
     }
 
     return packet;
+}
+
+const std::vector<u8> &packet::data() const noexcept {
+    return m_data;
+}
+
+void packet::push_data(u8 byte) noexcept {
+    m_data.push_back(byte);
 }
 
 ssize_t packet::sendto(linuxfd_t fd, const packet &packet, const sockaddr_in *addr) {

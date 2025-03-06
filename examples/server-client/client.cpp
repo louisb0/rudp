@@ -29,6 +29,20 @@ int main() {
 
     printf("Connected\n");
 
-    // rudp::close(fd);
+    const char *message = "Here is some data! ";
+
+    char buffer[2048]{};
+    for (size_t i = 0; i < 2048; i++) {
+        buffer[i] = message[i % (strlen(message))];
+    }
+
+    if (rudp::send(fd, buffer, 2048, 0) < 0) {
+        perror("rudp::send");
+        exit(EXIT_FAILURE);
+    }
+
+    while (true) {
+    }
+
     return 0;
 }

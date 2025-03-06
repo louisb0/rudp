@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <sys/socket.h>
+#include <unistd.h>
 
 #include <cstdio>
 #include <cstdlib>
@@ -45,6 +46,16 @@ int main() {
 
         printf("Connected to %s:%d\n", inet_ntoa(client_addr.sin_addr),
                ntohs(client_addr.sin_port));
+
+        char buf[2049];
+        ssize_t bytes = rudp::recv(client_fd, buf, 2049, 0);
+        if (bytes < 0) {
+            perror("rudp::recv");
+        } else {
+            buf[bytes] = '\0';
+            printf("%s[END]\n", buf);
+        }
+
         // rudp::close(client_fd);
     }
 }

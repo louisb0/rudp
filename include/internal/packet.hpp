@@ -32,6 +32,9 @@ public:
     static ssize_t sendto(linuxfd_t fd, const packet &packet, const sockaddr_in *addr);
     static std::optional<packet> recvfrom(linuxfd_t fd, sockaddr_in *addr);
 
+    [[nodiscard]] const std::vector<u8> &data() const noexcept;
+    void push_data(u8 byte) noexcept;
+
 private:
     std::vector<u8> m_data;
 

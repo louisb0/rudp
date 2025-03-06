@@ -77,18 +77,21 @@ void listener::handle_events() noexcept {
             continue;
         }
 
-        // Respond to the SYN, create the socket, and signal the user thread.
+        // Register the callback and respond to the active open.
+        rudpfd_t newfd = g_next_fd++;
+        connection->on_established([this, newfd]() {
+            std::lock_guard<std::mutex> lock(m_mtx);
+            m_ready.push(newfd);
+            m_cv.notify_one();
+        });
+
         if (!connection->passive_open(peer_addr)) {
             event_loop->remove_handler(handler_type::connection, fd);
             close(fd);
             continue;
         }
 
-        rudpfd_t newfd = g_next_fd++;
         g_sockets[newfd] = internal::socket{std::move(connection)};
-
-        m_ready.push(newfd);
-        m_cv.notify_one();
     }
 }
 

@@ -3,10 +3,12 @@
 #include <sys/types.h>
 
 // TODO: Check imports project-wide.
+#include <algorithm>
 #include <cstdio>
 #include <cstring>
 #include <memory>
 
+#include "internal/assert.hpp"
 #include "internal/common.hpp"
 #include "internal/connection.hpp"
 #include "internal/event_loop.hpp"
@@ -24,7 +26,7 @@ int socket(void) noexcept {
 int bind(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     // Argument validation.
     if (addr == nullptr) {
-        errno = EINVAL;
+        errno = EFAULT;
         return -1;
     }
 
@@ -133,7 +135,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
     // Argument validation.
     if (fillout_peer_addr) {
         if (addrlen == nullptr) {
-            errno = EINVAL;
+            errno = EFAULT;
             return -1;
         }
 
@@ -184,7 +186,7 @@ int accept(int sockfd, struct sockaddr *addr, socklen_t *addrlen) noexcept {
 int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     // Argument validation.
     if (addr == nullptr) {
-        errno = EINVAL;
+        errno = EFAULT;
         return -1;
     }
 
@@ -269,8 +271,97 @@ int connect(int sockfd, struct sockaddr *addr, socklen_t addrlen) noexcept {
     return 0;
 }
 
-size_t send(int sockfd, const void *buf, size_t len, int flags) noexcept;
-size_t recv(int sockfd, void *buf, size_t len, int flags) noexcept;
+RUDP_STATIC_ASSERT(
+    std::numeric_limits<ssize_t>::max() >=
+        std::numeric_limits<decltype(internal::constants::MAX_SEND_BUFFER_BYTES)>::max(),
+    "send()'s cast of constants::MAX_SEND_BUFFER_BYTES to a ssize_t must be value-preserving.");
+
+ssize_t send(int sockfd, const void *buf, size_t len, int /** flags */) noexcept {
+    // Argument validation.
+    if (buf == nullptr) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (len == 0) {
+        return 0;
+    }
+
+    // Socket validation.
+    auto sock_it = internal::g_sockets.find(sockfd);
+    if (sock_it == internal::g_sockets.end()) {
+        errno = EBADF;
+        return -1;
+    }
+
+    internal::socket &sock = sock_it->second;
+    if (!sock.connected()) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+
+    // Fill out the available space on the buffer.
+    internal::connection *connection = sock.connection();
+    connection->wait_for_send_space();
+
+    return connection->synchronise([&]() {
+        const size_t space =
+            internal::constants::MAX_SEND_BUFFER_BYTES - connection->send_buffer.size();
+        const size_t copy = std::min(len, static_cast<size_t>(space));
+
+        if (copy > 0) {
+            const u8 *data = static_cast<const u8 *>(buf);
+            connection->send_buffer.insert(connection->send_buffer.end(), data, data + copy);
+        }
+
+        return static_cast<ssize_t>(copy);
+    });
+}
+
+ssize_t recv(int sockfd, void *buf, size_t len, int /** flags */) noexcept {
+    // Argument validation.
+    if (buf == nullptr) {
+        errno = EFAULT;
+        return -1;
+    }
+
+    if (len == 0) {
+        return 0;
+    }
+
+    // Socket validation.
+    auto sock_it = internal::g_sockets.find(sockfd);
+    if (sock_it == internal::g_sockets.end()) {
+        errno = EBADF;
+        return -1;
+    }
+
+    internal::socket &sock = sock_it->second;
+    if (!sock.connected()) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+
+    // Pull what is available on the buffer.
+    internal::connection *connection = sock.connection();
+    connection->wait_for_recv_data();
+
+    return connection->synchronise([&]() {
+        const size_t available = connection->recv_buffer.size();
+        const size_t copy = std::min(len, available);
+
+        if (copy > 0) {
+            u8 *output = static_cast<u8 *>(buf);
+
+            for (size_t i = 0; i < copy; ++i) {
+                output[i] = connection->recv_buffer.front();
+                connection->recv_buffer.pop_front();
+            }
+        }
+
+        return static_cast<ssize_t>(copy);
+    });
+}
 
 int close(int sockfd) noexcept;
 
