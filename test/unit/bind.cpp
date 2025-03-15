@@ -4,9 +4,9 @@
 
 #include <rudp.hpp>
 
-class BindTest : public testing::Test {
+class BindUnitTest : public testing::Test {
 protected:
-    BindTest() : addr{} {
+    BindUnitTest() : addr{} {
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
         addr_in->sin_family = AF_INET;
         addr_in->sin_addr.s_addr = INADDR_ANY;
@@ -15,21 +15,21 @@ protected:
     struct sockaddr addr;
 };
 
-TEST_F(BindTest, AddrNull) {
+TEST_F(BindUnitTest, AddrNull) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, nullptr, 0), -1);
     ASSERT_EQ(errno, EFAULT);
 }
 
-TEST_F(BindTest, AddrlenNotInet) {
+TEST_F(BindUnitTest, AddrlenNotInet) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr) - 1), -1);
     ASSERT_EQ(errno, EINVAL);
 }
 
-TEST_F(BindTest, AddrFamilyNotInet) {
+TEST_F(BindUnitTest, AddrFamilyNotInet) {
     int fd = rudp::socket();
 
     addr.sa_family = AF_UNIX;
@@ -38,12 +38,12 @@ TEST_F(BindTest, AddrFamilyNotInet) {
     ASSERT_EQ(errno, EAFNOSUPPORT);
 }
 
-TEST_F(BindTest, SocketDne) {
+TEST_F(BindUnitTest, SocketDne) {
     ASSERT_EQ(rudp::bind(-1, &addr, sizeof(addr)), -1);
     ASSERT_EQ(errno, EBADF);
 }
 
-TEST_F(BindTest, SocketBound) {
+TEST_F(BindUnitTest, SocketBound) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -51,7 +51,7 @@ TEST_F(BindTest, SocketBound) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket cannot be bound twice.";
 }
 
-TEST_F(BindTest, SocketListening) {
+TEST_F(BindUnitTest, SocketListening) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -61,7 +61,7 @@ TEST_F(BindTest, SocketListening) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket cannot be bound once listening.";
 }
 
-TEST_F(BindTest, SocketConnected) {
+TEST_F(BindUnitTest, SocketConnected) {
     reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port = htons(1234);
 
     int serverfd = rudp::socket();
@@ -75,7 +75,7 @@ TEST_F(BindTest, SocketConnected) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket cannot be bound once connected.";
 }
 
-TEST_F(BindTest, ForwardsErrno) {
+TEST_F(BindUnitTest, ForwardsErrno) {
     int fd = rudp::socket();
 
     reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port = htons(80);  // requires root
@@ -84,7 +84,7 @@ TEST_F(BindTest, ForwardsErrno) {
     ASSERT_EQ(errno, EACCES) << "errno must be forwarded to the caller.";
 }
 
-TEST_F(BindTest, Success) {
+TEST_F(BindUnitTest, Success) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);

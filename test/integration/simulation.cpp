@@ -4,12 +4,12 @@
 
 #include <rudp.hpp>
 
-#include "internal/testing/simulator.hpp"
+#include "internal/simulator.hpp"
 
-class SimulationTest : public testing::Test {
+class SimulationIntegrationTest : public testing::Test {
 protected:
     void SetUp() override {
-        rudp::internal::testing::simulator::instance().reset();
+        rudp::internal::simulator::instance().reset();
 
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
         addr_in->sin_family = AF_INET;
@@ -58,8 +58,8 @@ protected:
     }
 };
 
-TEST_F(SimulationTest, PacketLoss30) {
-    auto &sim = rudp::internal::testing::simulator::instance();
+TEST_F(SimulationIntegrationTest, PacketLoss30) {
+    auto &sim = rudp::internal::simulator::instance();
     sim.drop = 0.3f;
 
     ASSERT_EQ(rudp::send(clientfd, client_data.data(), client_data.size(), 0),
@@ -73,8 +73,8 @@ TEST_F(SimulationTest, PacketLoss30) {
         << "The server must receive the same data sent by the client.";
 }
 
-TEST_F(SimulationTest, Latency1000to5000) {
-    auto &sim = rudp::internal::testing::simulator::instance();
+TEST_F(SimulationIntegrationTest, Latency1000to5000) {
+    auto &sim = rudp::internal::simulator::instance();
     sim.min_latency_ms = 1000;
     sim.max_latency_ms = 5000;
 
@@ -89,8 +89,8 @@ TEST_F(SimulationTest, Latency1000to5000) {
         << "The server must receive the same data sent by the client.";
 }
 
-TEST_F(SimulationTest, PacketLoss30Latency1000to5000) {
-    auto &sim = rudp::internal::testing::simulator::instance();
+TEST_F(SimulationIntegrationTest, PacketLoss30Latency1000to5000) {
+    auto &sim = rudp::internal::simulator::instance();
     sim.drop = 0.3f;
     sim.min_latency_ms = 1000;
     sim.max_latency_ms = 5000;

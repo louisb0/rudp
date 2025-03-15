@@ -4,9 +4,9 @@
 
 #include <rudp.hpp>
 
-class ListenTest : public testing::Test {
+class ListenUnitTest : public testing::Test {
 protected:
-    ListenTest() : addr{} {
+    ListenUnitTest() : addr{} {
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
         addr_in->sin_family = AF_INET;
         addr_in->sin_addr.s_addr = INADDR_ANY;
@@ -15,7 +15,7 @@ protected:
     struct sockaddr addr;
 };
 
-TEST_F(ListenTest, BacklogSaturates) {
+TEST_F(ListenUnitTest, BacklogSaturates) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -23,7 +23,7 @@ TEST_F(ListenTest, BacklogSaturates) {
     ASSERT_EQ(rudp::listen(fd, SOMAXCONN + 1), 0);
 }
 
-TEST_F(ListenTest, BacklogInvalid) {
+TEST_F(ListenUnitTest, BacklogInvalid) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -32,19 +32,19 @@ TEST_F(ListenTest, BacklogInvalid) {
     ASSERT_EQ(errno, EINVAL);
 }
 
-TEST_F(ListenTest, SocketDne) {
+TEST_F(ListenUnitTest, SocketDne) {
     ASSERT_EQ(rudp::listen(-1, 1), -1);
     ASSERT_EQ(errno, EBADF);
 }
 
-TEST_F(ListenTest, SocketCreated) {
+TEST_F(ListenUnitTest, SocketCreated) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::listen(fd, 1), -1);
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket must be bound before it can listen.";
 }
 
-TEST_F(ListenTest, SocketListening) {
+TEST_F(ListenUnitTest, SocketListening) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -54,7 +54,7 @@ TEST_F(ListenTest, SocketListening) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket cannot listen twice.";
 }
 
-TEST_F(ListenTest, SocketConnected) {
+TEST_F(ListenUnitTest, SocketConnected) {
     reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port = htons(1234);
 
     int serverfd = rudp::socket();
@@ -68,7 +68,7 @@ TEST_F(ListenTest, SocketConnected) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket cannot listen once connected.";
 }
 
-TEST_F(ListenTest, Success) {
+TEST_F(ListenUnitTest, Success) {
     int fd = rudp::socket();
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
     ASSERT_EQ(rudp::listen(fd, 1), 0);

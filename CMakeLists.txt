@@ -34,6 +34,7 @@ add_library(${PROJECT_NAME}
     src/connection.cpp
     src/state.cpp
     src/packet.cpp
+    src/simulator.cpp
 )
 
 target_include_directories(${PROJECT_NAME}
@@ -72,6 +73,7 @@ add_executable(tests
     test/unit/send.cpp
     test/unit/recv.cpp
     test/integration/send_recv.cpp
+    test/integration/simulation.cpp
 )
 target_link_libraries(tests PRIVATE ${PROJECT_NAME} GTest::gtest_main)
 target_compile_options(tests PRIVATE ${COMMON_WARNINGS})

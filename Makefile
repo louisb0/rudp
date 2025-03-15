@@ -1,4 +1,4 @@
-.PHONY: all clean rebuild test examples lib
+.PHONY: all clean rebuild test unit integration examples lib
 
 lib:
 	mkdir -p build
@@ -9,7 +9,12 @@ examples: lib
 
 test: lib
 	cd build && cmake --build . --target tests
-	cd build && ctest --output-on-failure
+
+unit: test 
+	cd build && ctest --output-on-failure -R ".*UnitTest.*"
+
+integration: test
+	cd build && ctest --output-on-failure -R ".*IntegrationTest.*"
 
 all: lib examples test
 

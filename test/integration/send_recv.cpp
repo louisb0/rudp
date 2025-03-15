@@ -4,7 +4,7 @@
 
 #include <rudp.hpp>
 
-class SendRecvTest : public ::testing::Test {
+class SendRecvIntegrationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
@@ -54,7 +54,7 @@ protected:
     }
 };
 
-TEST_F(SendRecvTest, ClientToServer) {
+TEST_F(SendRecvIntegrationTest, ClientToServer) {
     ASSERT_EQ(rudp::send(clientfd, client_data.data(), client_data.size(), 0),
               static_cast<ssize_t>(client_data.size()));
 
@@ -66,7 +66,7 @@ TEST_F(SendRecvTest, ClientToServer) {
         << "The server must receive the same data sent by the client.";
 }
 
-TEST_F(SendRecvTest, ServerToClient) {
+TEST_F(SendRecvIntegrationTest, ServerToClient) {
     ASSERT_EQ(rudp::send(accepted_fd, server_data.data(), server_data.size(), 0),
               static_cast<ssize_t>(server_data.size()));
 
@@ -78,7 +78,7 @@ TEST_F(SendRecvTest, ServerToClient) {
         << "The client must receive the same data sent by the server.";
 }
 
-TEST_F(SendRecvTest, Duplex) {
+TEST_F(SendRecvIntegrationTest, Duplex) {
     ASSERT_EQ(rudp::send(clientfd, client_data.data(), client_data.size(), 0),
               static_cast<ssize_t>(client_data.size()));
     ASSERT_EQ(rudp::send(accepted_fd, server_data.data(), server_data.size(), 0),

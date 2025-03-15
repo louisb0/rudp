@@ -4,9 +4,9 @@
 
 #include <rudp.hpp>
 
-class AcceptTest : public testing::Test {
+class AcceptUnitTest : public testing::Test {
 protected:
-    AcceptTest() : addr{} {
+    AcceptUnitTest() : addr{} {
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
         addr_in->sin_family = AF_INET;
         addr_in->sin_addr.s_addr = INADDR_ANY;
@@ -15,7 +15,7 @@ protected:
     struct sockaddr addr;
 };
 
-TEST_F(AcceptTest, FilloutAddrlenNull) {
+TEST_F(AcceptUnitTest, FilloutAddrlenNull) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -25,7 +25,7 @@ TEST_F(AcceptTest, FilloutAddrlenNull) {
     ASSERT_EQ(errno, EFAULT);
 }
 
-TEST_F(AcceptTest, FilloutAddrlenNotInet) {
+TEST_F(AcceptUnitTest, FilloutAddrlenNotInet) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -36,13 +36,13 @@ TEST_F(AcceptTest, FilloutAddrlenNotInet) {
     ASSERT_EQ(errno, EINVAL);
 }
 
-TEST_F(AcceptTest, SocketDne) {
+TEST_F(AcceptUnitTest, SocketDne) {
     socklen_t len = sizeof(addr);
     ASSERT_EQ(rudp::accept(-1, &addr, &len), -1);
     ASSERT_EQ(errno, EBADF);
 }
 
-TEST_F(AcceptTest, SocketCreated) {
+TEST_F(AcceptUnitTest, SocketCreated) {
     int fd = rudp::socket();
 
     socklen_t len = sizeof(addr);
@@ -50,7 +50,7 @@ TEST_F(AcceptTest, SocketCreated) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket in the created state cannot accept connections.";
 }
 
-TEST_F(AcceptTest, SocketBound) {
+TEST_F(AcceptUnitTest, SocketBound) {
     int fd = rudp::socket();
 
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
@@ -60,7 +60,7 @@ TEST_F(AcceptTest, SocketBound) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket in the bound state cannot accept connections.";
 }
 
-TEST_F(AcceptTest, SocketConnected) {
+TEST_F(AcceptUnitTest, SocketConnected) {
     reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port = htons(1234);
 
     int serverfd = rudp::socket();
@@ -75,7 +75,7 @@ TEST_F(AcceptTest, SocketConnected) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket in the connected state cannot accept connections.";
 }
 
-TEST_F(AcceptTest, Success) {
+TEST_F(AcceptUnitTest, Success) {
     reinterpret_cast<struct sockaddr_in *>(&addr)->sin_port = htons(1234);
 
     int serverfd = rudp::socket();

@@ -5,9 +5,9 @@
 
 #include <rudp.hpp>
 
-class SendTest : public testing::Test {
+class SendUnitTest : public testing::Test {
 protected:
-    SendTest() : addr{} {
+    SendUnitTest() : addr{} {
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
         addr_in->sin_family = AF_INET;
         addr_in->sin_addr.s_addr = INADDR_ANY;
@@ -16,7 +16,7 @@ protected:
     struct sockaddr addr;
 };
 
-TEST_F(SendTest, BufNull) {
+TEST_F(SendUnitTest, BufNull) {
     int clientfd = rudp::socket();
     int serverfd = rudp::socket();
 
@@ -32,7 +32,7 @@ TEST_F(SendTest, BufNull) {
     ASSERT_EQ(errno, EFAULT);
 }
 
-TEST_F(SendTest, ZeroLength) {
+TEST_F(SendUnitTest, ZeroLength) {
     int clientfd = rudp::socket();
     int serverfd = rudp::socket();
 
@@ -48,14 +48,14 @@ TEST_F(SendTest, ZeroLength) {
     ASSERT_EQ(rudp::send(clientfd, message, 0, 0), 0);
 }
 
-TEST_F(SendTest, SockDne) {
+TEST_F(SendUnitTest, SockDne) {
     const char *message = "hello";
 
     ASSERT_EQ(rudp::send(-1, message, strlen(message), 0), -1);
     ASSERT_EQ(errno, EBADF);
 }
 
-TEST_F(SendTest, SocketCreated) {
+TEST_F(SendUnitTest, SocketCreated) {
     int fd = rudp::socket();
     const char *message = "hello";
 
@@ -63,7 +63,7 @@ TEST_F(SendTest, SocketCreated) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket in the created state cannot send data.";
 }
 
-TEST_F(SendTest, SocketBound) {
+TEST_F(SendUnitTest, SocketBound) {
     int fd = rudp::socket();
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
 
@@ -73,7 +73,7 @@ TEST_F(SendTest, SocketBound) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket in the bound state cannot send data.";
 }
 
-TEST_F(SendTest, SocketListening) {
+TEST_F(SendUnitTest, SocketListening) {
     int fd = rudp::socket();
     ASSERT_EQ(rudp::bind(fd, &addr, sizeof(addr)), 0);
     ASSERT_EQ(rudp::listen(fd, 1), 0);
@@ -84,7 +84,7 @@ TEST_F(SendTest, SocketListening) {
     ASSERT_EQ(errno, EOPNOTSUPP) << "A socket in the listening state cannot send data.";
 }
 
-TEST_F(SendTest, Success) {
+TEST_F(SendUnitTest, Success) {
     int clientfd = rudp::socket();
     int serverfd = rudp::socket();
 
