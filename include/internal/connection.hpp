@@ -79,7 +79,7 @@ private:
     std::condition_variable m_cv;
 
     std::unordered_map<u32, sent_packet> m_sent;
-    std::multimap<u32, received_packet> m_received;
+    std::map<u32, received_packet> m_received;
 
     void buffer_pending() noexcept;
 

@@ -46,7 +46,7 @@ void connection::handle_events() noexcept {
             handle_synack(packet, peer);
         }
 
-        if (packet.header.flags == static_cast<u8>(flag::ACK)) {
+        if (packet.header.flags & static_cast<u8>(flag::ACK)) {
             handle_ack(packet);
         }
 
@@ -94,7 +94,26 @@ void connection::buffer_pending() noexcept {
         }
 
         packet packet = packet_opt.value();
-        m_received.insert({packet.header.seqnum, {packet, peer_addr}});
+        if (packet.header.seqnum < m_acknum) {
+            continue;
+        }
+
+        // NOTE: We can have an existing entry in the case of an empty ACK. For example, following
+        // the handshake, ACK(SEQ=1) then DATA(SEQ=1). In this case, we want the resulting stored
+        // packet to have; the data, the ACK, and the maximum acknum of the duplicates.
+        auto existing = m_received.find(packet.header.seqnum);
+        if (existing != m_received.end()) {
+            auto stored = existing->second.packet;
+
+            stored.header.flags |= packet.header.flags;
+            stored.header.acknum = std::max(stored.header.acknum, packet.header.acknum);
+
+            if (!packet.data().empty() && stored.data().empty()) {
+                stored = std::move(packet);
+            }
+        } else {
+            m_received.insert({packet.header.seqnum, {packet, peer_addr}});
+        }
     }
 }
 
