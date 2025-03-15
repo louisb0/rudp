@@ -102,8 +102,6 @@ std::optional<packet> packet::deserialise(const std::vector<u8> &data) {
         packet.m_data.assign(
             data.begin() + static_cast<std::vector<u8>::difference_type>(i),
             data.begin() + static_cast<std::vector<u8>::difference_type>(i + copy));
-
-        packet.header.length += static_cast<u32>(packet.m_data.size());
     }
 
     return packet;

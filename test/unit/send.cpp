@@ -100,24 +100,3 @@ TEST_F(SendTest, Success) {
     ssize_t sent = rudp::send(clientfd, message, strlen(message), 0);
     ASSERT_EQ(sent, static_cast<ssize_t>(strlen(message)));
 }
-
-// TODO: Revisit once you have flow control.
-
-// TEST_F(SendTest, LargeMessageTest) {
-//     int clientfd = rudp::socket();
-//     int serverfd = rudp::socket();
-//
-//     ASSERT_EQ(rudp::bind(serverfd, &addr, sizeof(addr)), 0);
-//     ASSERT_EQ(rudp::listen(serverfd, 1), 0);
-//     ASSERT_EQ(rudp::connect(clientfd, &addr, sizeof(addr)), 0);
-//
-//     socklen_t len = sizeof(addr);
-//     int accepted_fd = rudp::accept(serverfd, &addr, &len);
-//     ASSERT_GE(accepted_fd, 0);
-//
-//     std::vector<char> large_message(100000, 'A');
-//
-//     ssize_t sent = rudp::send(clientfd, large_message.data(), large_message.size(), 0);
-//
-//     ASSERT_GT(sent, 0);
-// }
