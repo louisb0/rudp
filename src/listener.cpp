@@ -85,7 +85,7 @@ void listener::handle_events() noexcept {
             m_cv.notify_one();
         });
 
-        if (!connection->passive_open(peer_addr)) {
+        if (!connection->passive_open(peer_addr, packet)) {
             event_loop->remove_handler(handler_type::connection, fd);
             close(fd);
             continue;
