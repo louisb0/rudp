@@ -2,7 +2,7 @@
 
 #include "internal/common.hpp"
 
-namespace rudp::internal::testing {
+namespace rudp::internal {
 
 class simulator {
 public:
@@ -12,7 +12,13 @@ public:
     u16 min_latency_ms{};
     u16 max_latency_ms{};
 
-    void reset();
+    void reset() {
+        drop = {};
+        corruption = {};
+        duplication = {};
+        min_latency_ms = {};
+        max_latency_ms = {};
+    }
 
     static simulator &instance() {
         static simulator instance;
@@ -29,4 +35,4 @@ private:
     void simulate_latency() const noexcept;
 };
 
-}  // namespace rudp::internal::testing
+}  // namespace rudp::internal

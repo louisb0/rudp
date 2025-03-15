@@ -5,7 +5,7 @@
 #include <cstring>
 #include <rudp.hpp>
 
-#include "internal/testing/simulator.hpp"
+#include "internal/simulator.hpp"
 
 int main() {
     int fd = rudp::socket();
@@ -37,7 +37,7 @@ int main() {
         buffer[i] = '1' + static_cast<char>((i / 1024));
     }
 
-    auto &sim = rudp::internal::testing::simulator::instance();
+    auto &sim = rudp::internal::simulator::instance();
     sim.drop = 0.2f;
     sim.min_latency_ms = 500;
     sim.max_latency_ms = 2000;

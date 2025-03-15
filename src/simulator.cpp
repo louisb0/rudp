@@ -1,4 +1,5 @@
-#include "internal/testing/simulator.hpp"
+
+#include "internal/simulator.hpp"
 
 #include <random>
 #include <thread>
@@ -7,7 +8,7 @@
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
 
-namespace rudp::internal::testing {
+namespace rudp::internal {
 namespace {
     [[nodiscard]] float random_float() {
         static std::mt19937 gen(std::random_device{}());
@@ -31,14 +32,6 @@ namespace {
         }
     }
 }  // namespace
-
-void simulator::reset() {
-    drop = {};
-    corruption = {};
-    duplication = {};
-    min_latency_ms = {};
-    max_latency_ms = {};
-}
 
 ssize_t simulator::sendto(int sockfd, const void *buf, size_t len, int flags, const sockaddr *addr,
                           socklen_t addrlen) {
@@ -86,4 +79,4 @@ void simulator::simulate_latency() const noexcept {
     std::this_thread::sleep_for(std::chrono::milliseconds(dist(gen)));
 }
 
-}  // namespace rudp::internal::testing
+}  // namespace rudp::internal

@@ -10,7 +10,7 @@
 
 #include "internal/assert.hpp"
 #include "internal/common.hpp"
-#include "testing/simulator.hpp"
+#include "internal/simulator.hpp"
 
 namespace rudp::internal {
 
@@ -119,8 +119,8 @@ void packet::push_data(u8 byte) noexcept {
 ssize_t packet::sendto(linuxfd_t fd, const packet &packet, const sockaddr_in *addr) {
     std::vector<u8> serialised = packet.serialise();
 
-    return testing::simulator::sendto(fd, serialised.data(), serialised.size(), 0,
-                                      reinterpret_cast<const sockaddr *>(addr), sizeof(*addr));
+    return simulator::sendto(fd, serialised.data(), serialised.size(), 0,
+                             reinterpret_cast<const sockaddr *>(addr), sizeof(*addr));
 }
 
 std::optional<packet> packet::recvfrom(linuxfd_t fd, sockaddr_in *addr) {
