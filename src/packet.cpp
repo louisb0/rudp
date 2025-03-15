@@ -6,6 +6,7 @@
 
 #include <cstring>
 #include <optional>
+#include <variant>
 #include <vector>
 
 #include "internal/assert.hpp"
@@ -93,12 +94,13 @@ std::optional<packet> packet::deserialise(const std::vector<u8> &data) {
     packet packet(header);
 
     // Data.
-    // TODO: This is a temporary hack - we should handle the case (nullopt) when we receive a
-    // malformed packet, not just truncate the data. The issue is we can't use length reliably as
-    // it's relative to acknum/seqnums and not the data.
-    if (i < data.size()) {
-        size_t remaining = data.size() - i;
-        size_t copy = std::min(remaining, static_cast<size_t>(constants::MAX_DATA_BYTES));
+    if (header.length > 0) {
+        if (i + header.length > data.size()) {
+            return std::nullopt;
+        }
+
+        size_t copy = std::min(static_cast<size_t>(header.length),
+                               static_cast<size_t>(constants::MAX_DATA_BYTES));
 
         packet.m_data.assign(
             data.begin() + static_cast<std::vector<u8>::difference_type>(i),

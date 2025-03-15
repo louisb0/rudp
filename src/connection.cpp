@@ -78,10 +78,9 @@ void connection::buffer_pending() noexcept {
 
         std::optional<packet> packet_opt = packet::recvfrom(m_fd, &peer_addr);
         if (!packet_opt.has_value()) {
-            RUDP_ASSERT(
-                errno == EWOULDBLOCK || errno == EAGAIN || errno == EINTR,
-                "recvfrom() can only fail due to non-blocking or interruption, but we got %s.",
-                strerror(errno));
+            // TODO: packet::recvfrom() has a bad interface. It returns std::nullopt in the case of
+            // a recvfrom() error, or a malformed packet (which should just be dropped). The
+            // interface provides no way to distinguish these cases.
             break;
         }
 
