@@ -4,9 +4,13 @@
 
 #include <rudp.hpp>
 
-class SendRecvTest : public ::testing::Test {
+#include "internal/testing/simulator.hpp"
+
+class SimulationTest : public testing::Test {
 protected:
     void SetUp() override {
+        rudp::internal::testing::simulator::instance().reset();
+
         auto *addr_in = reinterpret_cast<struct sockaddr_in *>(&addr);
         addr_in->sin_family = AF_INET;
         addr_in->sin_addr.s_addr = INADDR_ANY;
@@ -54,7 +58,10 @@ protected:
     }
 };
 
-TEST_F(SendRecvTest, ClientToServer) {
+TEST_F(SimulationTest, PacketLoss30) {
+    auto &sim = rudp::internal::testing::simulator::instance();
+    sim.drop = 0.3f;
+
     ASSERT_EQ(rudp::send(clientfd, client_data.data(), client_data.size(), 0),
               static_cast<ssize_t>(client_data.size()));
 
@@ -66,35 +73,35 @@ TEST_F(SendRecvTest, ClientToServer) {
         << "The server must receive the same data sent by the client.";
 }
 
-TEST_F(SendRecvTest, ServerToClient) {
-    ASSERT_EQ(rudp::send(accepted_fd, server_data.data(), server_data.size(), 0),
-              static_cast<ssize_t>(server_data.size()));
+TEST_F(SimulationTest, Latency1000to5000) {
+    auto &sim = rudp::internal::testing::simulator::instance();
+    sim.min_latency_ms = 1000;
+    sim.max_latency_ms = 5000;
 
-    std::vector<char> client_received(msg_size);
-    size_t total_received = recv_all(clientfd, client_received);
-
-    ASSERT_EQ(total_received, msg_size) << "The client must receive all bytes.";
-    ASSERT_EQ(memcmp(server_data.data(), client_received.data(), msg_size), 0)
-        << "The client must receive the same data sent by the server.";
-}
-
-TEST_F(SendRecvTest, Duplex) {
     ASSERT_EQ(rudp::send(clientfd, client_data.data(), client_data.size(), 0),
               static_cast<ssize_t>(client_data.size()));
-    ASSERT_EQ(rudp::send(accepted_fd, server_data.data(), server_data.size(), 0),
-              static_cast<ssize_t>(server_data.size()));
-
-    std::vector<char> client_received(msg_size);
-    size_t client_total_received = recv_all(clientfd, client_received);
 
     std::vector<char> server_received(msg_size);
-    size_t server_total_received = recv_all(accepted_fd, server_received);
+    size_t total_received = recv_all(accepted_fd, server_received);
 
-    ASSERT_EQ(client_total_received, msg_size) << "The client must receive all bytes.";
-    ASSERT_EQ(server_total_received, msg_size) << "The server must receive all bytes.";
-
+    ASSERT_EQ(total_received, msg_size) << "The server must receive all bytes.";
     ASSERT_EQ(memcmp(client_data.data(), server_received.data(), msg_size), 0)
         << "The server must receive the same data sent by the client.";
-    ASSERT_EQ(memcmp(server_data.data(), client_received.data(), msg_size), 0)
-        << "The client must receive the same data sent by the server.";
+}
+
+TEST_F(SimulationTest, PacketLoss30Latency1000to5000) {
+    auto &sim = rudp::internal::testing::simulator::instance();
+    sim.drop = 0.3f;
+    sim.min_latency_ms = 1000;
+    sim.max_latency_ms = 5000;
+
+    ASSERT_EQ(rudp::send(clientfd, client_data.data(), client_data.size(), 0),
+              static_cast<ssize_t>(client_data.size()));
+
+    std::vector<char> server_received(msg_size);
+    size_t total_received = recv_all(accepted_fd, server_received);
+
+    ASSERT_EQ(total_received, msg_size) << "The server must receive all bytes.";
+    ASSERT_EQ(memcmp(client_data.data(), server_received.data(), msg_size), 0)
+        << "The server must receive the same data sent by the client.";
 }

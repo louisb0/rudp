@@ -34,7 +34,7 @@ using rudpfd_t = s32;
 namespace internal::constants {
     inline constexpr s32 UNINITIALISED_FD = -1;
 
-    inline constexpr u8 MAX_RETRANSMITS = 5;
+    inline constexpr u8 MAX_RETRANSMITS = 20;
     inline constexpr u16 MAX_DATA_BYTES = 1024;
     inline constexpr std::chrono::milliseconds RETRANSMIT_TIME = std::chrono::milliseconds(5000);
 

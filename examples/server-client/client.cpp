@@ -5,6 +5,8 @@
 #include <cstring>
 #include <rudp.hpp>
 
+#include "internal/testing/simulator.hpp"
+
 int main() {
     int fd = rudp::socket();
     if (fd < 0) {
@@ -34,6 +36,11 @@ int main() {
     for (int i = 0; i < size; i++) {
         buffer[i] = '1' + static_cast<char>((i / 1024));
     }
+
+    auto &sim = rudp::internal::testing::simulator::instance();
+    sim.drop = 0.2f;
+    sim.min_latency_ms = 500;
+    sim.max_latency_ms = 2000;
 
     if (rudp::send(fd, buffer, size, 0) < 0) {
         perror("rudp::send");
