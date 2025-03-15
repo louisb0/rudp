@@ -21,13 +21,13 @@
 
 namespace rudp::internal {
 namespace {
-    [[nodiscard]] static bool addr_equals(const sockaddr_in &first, const sockaddr_in &second) {
+    [[nodiscard]] static bool equals(const sockaddr_in &first, const sockaddr_in &second) {
         return (first.sin_addr.s_addr == second.sin_addr.s_addr) &&
                (first.sin_port == second.sin_port);
     }
 }  // namespace
 
-std::map<std::chrono::steady_clock::time_point, std::unique_ptr<class connection>>
+std::map<std::chrono::steady_clock::time_point, std::unique_ptr<connection>>
     g_time_wait_connections;
 
 void connection::handle_events() noexcept {
@@ -39,7 +39,6 @@ void connection::handle_events() noexcept {
     while (!m_received.empty() && m_acknum == m_received.begin()->first) {
         auto it = m_received.begin();
         const auto &[packet, peer] = it->second;
-
         RUDP_ASSERT(packet.header.seqnum == m_received.begin()->first,
                     "A received packet in m_received must have it's sequence number as it's key.");
 
@@ -57,7 +56,7 @@ void connection::handle_events() noexcept {
             received_data = true;
         }
 
-        m_acknum += packet.header.length;
+        m_acknum += get_sequence_advance(packet);
         m_received.erase(it);
     }
 
@@ -65,7 +64,7 @@ void connection::handle_events() noexcept {
     flags |= static_cast<u8>(flag::ACK) & -static_cast<u8>(received_data != 0);
 
     if (flags != state::NO_FLAGS) {
-        send_store_packet(flags);
+        send_control_packet(flags);
     }
 
     if (received_data) {
@@ -90,8 +89,7 @@ void connection::buffer_pending() noexcept {
             continue;
         }
 
-        if (!addr_equals(m_peer, constants::UNINITIALISED_PEER) &&
-            !addr_equals(m_peer, peer_addr)) {
+        if (!equals(m_peer, constants::UNINITIALISED_PEER) && !equals(m_peer, peer_addr)) {
             continue;
         }
 
@@ -100,10 +98,29 @@ void connection::buffer_pending() noexcept {
     }
 }
 
+void connection::handle_synack(const packet &packet, const sockaddr_in &peer) noexcept {
+    RUDP_ASSERT(packet.header.seqnum == m_acknum,
+                "m_acknum must be in sync with the current packet being handled.");
+
+    // NOTE: We expect a SYNACK in response to our SYN (active_open()).
+    if (m_state.current() == state::kind::syn_sent) {
+        RUDP_ASSERT(equals(m_peer, constants::UNINITIALISED_PEER),
+                    "A connection cannot have processed a packet from it's peer prior to a "
+                    "transition out of SYN_SENT.");
+        RUDP_ASSERT(!m_listener_established,
+                    "A callback must not be registered in the active open case.");
+
+        // TODO: on_first_packet()
+        m_peer = peer;
+        m_state.transition(state::kind::established);
+        m_cv.notify_one();
+    }
+}
+
 void connection::handle_ack(const packet &packet) noexcept {
     RUDP_ASSERT(packet.header.seqnum == m_acknum,
                 "m_acknum must be in sync with the current packet being handled.");
-    RUDP_ASSERT(!addr_equals(m_peer, constants::UNINITIALISED_PEER),
+    RUDP_ASSERT(!equals(m_peer, constants::UNINITIALISED_PEER),
                 "A connection must have processed a valid SYN(ACK) from our peer prior to "
                 "processing an individual ACK.");
 
@@ -115,8 +132,7 @@ void connection::handle_ack(const packet &packet) noexcept {
         m_sent.erase(sent_packet.header.seqnum);
     }
 
-    // NOTE: This is handling an 'ACK' response to our 'SYNACK'; it is the transition following
-    // connection::passive_open().
+    // NOTE: We expect an 'ACK' in response to our SYNACK (passive_open()).
     if (m_state.current() == state::kind::syn_rcvd) {
         RUDP_ASSERT(m_listener_established,
                     "A callback must be registered in the passive open case.");
@@ -126,31 +142,57 @@ void connection::handle_ack(const packet &packet) noexcept {
     }
 }
 
-void connection::handle_synack(const packet &packet, const sockaddr_in &peer) noexcept {
-    RUDP_ASSERT(packet.header.seqnum == m_acknum,
-                "m_acknum must be in sync with the current packet being handled.");
+bool connection::send_control_packet(u8 flags, std::optional<sockaddr_in> to) noexcept {
+    packet packet(packet_header{
+        .flags = flags,
+        .seqnum = m_seqnum,
+        .acknum = m_acknum,
+        .length = 0,
+    });
 
-    // NOTE: This is handling a 'SYNACK' response to our 'SYN'; it is the transition following
-    // connection::active_open().
-    if (m_state.current() == state::kind::syn_sent) {
-        RUDP_ASSERT(addr_equals(m_peer, constants::UNINITIALISED_PEER),
-                    "A connection cannot have processed a packet from it's peer prior to a "
-                    "transition out of SYN_SENT.");
-        RUDP_ASSERT(!m_listener_established,
-                    "A callback must not be registered in the active open case.");
-
-        m_peer = peer;
-        m_state.transition(state::kind::established);
-        m_cv.notify_one();
+    if (flags & static_cast<u8>(flag::SYN) || flags & static_cast<u8>(flag::FIN)) {
+        m_seqnum++;
     }
+
+    return send_packet(packet, to);
+}
+
+bool connection::send_packet(const packet &packet, std::optional<sockaddr_in> to) noexcept {
+    RUDP_ASSERT(m_state.current() != state::kind::created,
+                "A state transition must preceed any sending of packets.");
+    RUDP_ASSERT(!m_sent.contains(m_seqnum),
+                "A packet must not be sent twice through send_store_packet().");
+
+    // clang-format off
+    bool needs_ack = 
+        (packet.header.flags & static_cast<u8>(flag::SYN)) ||
+        (packet.header.flags & static_cast<u8>(flag::FIN)) ||
+        !packet.data().empty();
+    // clang-format on 
+
+    if (needs_ack) {
+        m_sent[packet.header.seqnum] = {
+            .packet = packet,
+            .sent_at = std::chrono::steady_clock::now(),
+            .retransmits = 0,
+        };
+    }
+
+    const sockaddr_in &peer = (to.has_value()) ? to.value() : m_peer;
+    return (packet::sendto(m_fd, packet, &peer) > 0);
+}
+
+u32 connection::get_sequence_advance(const packet& packet) noexcept {
+    u32 advance = packet.header.flags & static_cast<u8>(flag::SYN);
+    advance += packet.header.length;
+
+    return advance;
 }
 
 RUDP_STATIC_ASSERT(
     constants::MAX_DATA_BYTES <= std::numeric_limits<u16>::max(),
     "proccess_send()'s cast from size_t to u16 assumes that constants::MAX_DATA_BYTES is u16.");
-
 void connection::process_sends() noexcept {
-    // TODO: This condition becomes less clear when we have a closing sequence.
     if (m_state.current() != state::kind::established) {
         return;
     }
@@ -158,24 +200,23 @@ void connection::process_sends() noexcept {
     std::lock_guard<std::mutex> lock(m_mtx);
 
     while (!send_buffer.empty()) {
-        const u16 send = static_cast<u16>(
+        const u16 to_send = static_cast<u16>(
             std::min(static_cast<size_t>(constants::MAX_DATA_BYTES), send_buffer.size()));
 
         packet packet(packet_header{
             .seqnum = m_seqnum,
             .acknum = m_acknum,
-            .length = send,
+            .length = to_send,
         });
 
         auto it = send_buffer.begin();
-        for (size_t i = 0; i < send; i++) {
+        for (size_t i = 0; i < to_send; i++) {
             packet.push_data(*it);
             ++it;
         }
 
-        if (!send_store_packet(packet)) {
+        if (!send_packet(packet)) {
             if (errno == ECONNRESET) {
-                // TODO: Below.
                 RUDP_ASSERT(false, "Connection reset; you must decide how to handle this.");
             }
 
@@ -186,15 +227,14 @@ void connection::process_sends() noexcept {
             break;
         }
 
-        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + send);
-        m_seqnum += send;
+        send_buffer.erase(send_buffer.begin(), send_buffer.begin() + to_send);
+        m_seqnum += to_send;
     }
 }
 
 void connection::retransmit() noexcept {
     for (auto &[_, sent_packet] : m_sent) {
         if (sent_packet.retransmits == constants::MAX_RETRANSMITS) {
-            // TODO: Below.
             RUDP_ASSERT(false, "Max retransmits reached; you must decide how to handle this.");
         }
 
@@ -208,26 +248,24 @@ void connection::retransmit() noexcept {
     }
 }
 
-bool connection::passive_open(const sockaddr_in &peer) noexcept {
-    RUDP_ASSERT(addr_equals(m_peer, constants::UNINITIALISED_PEER),
+bool connection::passive_open(const sockaddr_in &peer, const packet &packet) noexcept {
+    RUDP_ASSERT(equals(m_peer, constants::UNINITIALISED_PEER),
                 "A connection cannot cannot both respond to an intial open and have previously "
                 "processed a packet from it's peer.");
 
-    // NOTE: This works only because we start our sequence numbers at 0. Ideally, this would just be
-    // packet.header.seqnum + 1.
-    m_acknum = 1;
+    m_acknum = packet.header.seqnum + 1;
     m_peer = peer;
     m_state.transition(state::kind::syn_rcvd);
-    return send_store_packet(m_state.derive_flags());
+    return send_control_packet(m_state.derive_flags());
 }
 
 bool connection::active_open(const sockaddr_in &listening_peer) noexcept {
-    RUDP_ASSERT(addr_equals(m_peer, constants::UNINITIALISED_PEER),
+    RUDP_ASSERT(equals(m_peer, constants::UNINITIALISED_PEER),
                 "A connection cannot cannot both initiate an open and have previously processed a "
                 "packet from it's peer.");
 
     m_state.transition(state::kind::syn_sent);
-    return send_store_packet(m_state.derive_flags(), listening_peer);
+    return send_control_packet(m_state.derive_flags(), listening_peer);
 }
 
 void connection::wait_for_established() noexcept {
@@ -261,58 +299,12 @@ void connection::wait_for_recv_data() noexcept {
     m_cv.wait(lock, [this]() { return !recv_buffer.empty(); });
 }
 
-// TODO: Look at the moving of functional types, project-wide.
 void connection::on_established(std::function<void()> callback) noexcept {
     m_listener_established = std::move(callback);
 }
 
 const sockaddr_in &connection::peer() const noexcept {
     return m_peer;
-}
-
-// TODO: The entire packet setup is currently very inefficient and copies a lot of data.
-// TODO: The needs_ack being split between these two methods is almost certainly going to create
-// bugs.
-bool connection::send_store_packet(u8 flags, std::optional<sockaddr_in> to) noexcept {
-    bool needs_ack = (flags & static_cast<u8>(flag::SYN));
-
-    packet packet(packet_header{
-        .flags = flags,
-        .seqnum = m_seqnum,
-        .acknum = m_acknum,
-        .length = needs_ack,
-    });
-
-    if (needs_ack) {
-        m_seqnum++;
-    }
-
-    const sockaddr_in &peer = (to.has_value()) ? to.value() : m_peer;
-    return send_store_packet(packet, peer);
-}
-
-bool connection::send_store_packet(const packet &packet, std::optional<sockaddr_in> to) noexcept {
-    RUDP_ASSERT(m_state.current() != state::kind::created,
-                "A state transition must preceed any sending of packets.");
-    RUDP_ASSERT(!m_sent.contains(m_seqnum),
-                "A packet must not be sent twice through send_store_packet().");
-
-    // clang-format off
-    bool needs_ack = 
-        (packet.header.flags & static_cast<u8>(flag::SYN)) ||
-        !packet.data().empty();
-    // clang-format on 
-
-    if (needs_ack) {
-        m_sent[packet.header.seqnum] = {
-            .packet = packet,
-            .sent_at = std::chrono::steady_clock::now(),
-            .retransmits = 0,
-        };
-    }
-
-    const sockaddr_in &peer = (to.has_value()) ? to.value() : m_peer;
-    return (packet::sendto(m_fd, packet, &peer) > 0);
 }
 
 void connection::assert_external_state(const char *caller) const noexcept {
@@ -325,5 +317,6 @@ void connection::assert_external_state(const char *caller) const noexcept {
 
     RUDP_ASSERT(is_valid_sockfd(m_fd), "A connection's underlying file descriptor must be valid.");
 }
+
 
 }  // namespace rudp::internal

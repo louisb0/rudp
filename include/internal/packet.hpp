@@ -10,6 +10,7 @@ namespace rudp::internal {
 enum class flag : u8 {
     SYN = 1 << 0,
     ACK = 1 << 1,
+    FIN = 1 << 2,
 };
 
 struct packet_header {

@@ -42,7 +42,7 @@ public:
     void retransmit() noexcept;
     void process_sends() noexcept;
 
-    [[nodiscard]] bool passive_open(const sockaddr_in &peer) noexcept;
+    [[nodiscard]] bool passive_open(const sockaddr_in &peer, const packet &packet) noexcept;
     [[nodiscard]] bool active_open(const sockaddr_in &listening_peer) noexcept;
 
     void wait_for_established() noexcept;
@@ -86,9 +86,11 @@ private:
     void handle_ack(const packet &packet) noexcept;
     void handle_synack(const packet &packet, const sockaddr_in &peer) noexcept;
 
-    bool send_store_packet(u8 flags, std::optional<sockaddr_in> to = std::nullopt) noexcept;
-    [[nodiscard]] bool send_store_packet(const packet &packet,
-                                         std::optional<sockaddr_in> to = std::nullopt) noexcept;
+    bool send_control_packet(u8 flags, std::optional<sockaddr_in> to = std::nullopt) noexcept;
+    [[nodiscard]] bool send_packet(const packet &packet,
+                                   std::optional<sockaddr_in> to = std::nullopt) noexcept;
+
+    u32 get_sequence_advance(const packet &packet) noexcept;
 
     void assert_external_state(const char *caller) const noexcept;
 };
