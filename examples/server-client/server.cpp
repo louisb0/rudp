@@ -47,15 +47,21 @@ int main() {
         printf("Connected to %s:%d\n", inet_ntoa(client_addr.sin_addr),
                ntohs(client_addr.sin_port));
 
-        char buf[2049];
-        ssize_t bytes = rudp::recv(client_fd, buf, 2049, 0);
-        if (bytes < 0) {
-            perror("rudp::recv");
-        } else {
-            buf[bytes] = '\0';
-            printf("%s[END]\n", buf);
+        const int size = 1024 * 5 + 1;
+        char buf[size];
+        char *ptr = buf;
+
+        while (ptr < buf + size - 1) {
+            ssize_t bytes =
+                rudp::recv(client_fd, ptr, static_cast<size_t>(buf + size - 1 - ptr), 0);
+            if (bytes <= 0) {
+                break;
+            }
+            ptr += bytes;
         }
 
+        *ptr = '\0';
+        printf("%s[END]\n", buf);
         // rudp::close(client_fd);
     }
 }

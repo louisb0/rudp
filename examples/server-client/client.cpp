@@ -29,14 +29,13 @@ int main() {
 
     printf("Connected\n");
 
-    const char *message = "Here is some data! ";
-
-    char buffer[2048]{};
-    for (size_t i = 0; i < 2048; i++) {
-        buffer[i] = message[i % (strlen(message))];
+    const int size = 1024 * 5;
+    char buffer[size]{};
+    for (int i = 0; i < size; i++) {
+        buffer[i] = '1' + static_cast<char>((i / 1024));
     }
 
-    if (rudp::send(fd, buffer, 2048, 0) < 0) {
+    if (rudp::send(fd, buffer, size, 0) < 0) {
         perror("rudp::send");
         exit(EXIT_FAILURE);
     }
